@@ -1,0 +1,23 @@
+# Local Python environments
+.venv/
+venv/
+
+# Python caches and test/build output
+__pycache__/
+*.py[cod]
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+build/
+dist/
+*.egg-info/
+
+# Local datasets and generated training artifacts
+data_collected_potential_final_v58_mod25_320x320_cmds/
+checkpoints/
+*.pt
+*.pth
+*.ckpt
+
+# Local course/private files
+Tarea Metodos de Busqueda.ods

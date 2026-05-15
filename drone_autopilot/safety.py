@@ -1,0 +1,103 @@
+"""Runtime safety filtering for model-produced velocity commands."""
+
+from __future__ import annotations
+
+from dataclasses import dataclass
+
+import numpy as np
+
+from .core_types import VelocityCommand
+
+
+@dataclass(frozen=True)
+class SafetyConfig:
+    max_vx_mps: float = 2.0
+    max_vy_mps: float = 1.0
+    max_vz_mps: float = 1.0
+    max_yaw_rate_radps: float = 0.8
+    smoothing_alpha: float = 0.35
+    emergency_depth_m: float = 0.8
+    invalid_depth_fraction_limit: float = 0.8
+
+
+@dataclass(frozen=True)
+class SafetyFilterResult:
+    command: VelocityCommand
+    emergency_stop: bool
+    reason: str
+    min_depth_m: float | None = None
+
+
+class SafetyFilter:
+    """Clamp, smooth, and fail closed before commands reach a simulator."""
+
+    def __init__(self, config: SafetyConfig | None = None) -> None:
+        self.config = config or SafetyConfig()
+        self._previous = VelocityCommand.hover()
+
+    def reset(self) -> None:
+        self._previous = VelocityCommand.hover()
+
+    def filter(
+        self,
+        predicted: VelocityCommand | np.ndarray | list[float] | tuple[float, ...],
+        *,
+        depth_m: np.ndarray | None = None,
+    ) -> SafetyFilterResult:
+        command = self._coerce_command(predicted)
+        if command is None or not command.is_finite():
+            self._previous = VelocityCommand.hover()
+            return SafetyFilterResult(
+                command=VelocityCommand.hover(),
+                emergency_stop=True,
+                reason="invalid_prediction",
+            )
+
+        min_depth = self._min_valid_depth(depth_m)
+        if min_depth is not None and min_depth < self.config.emergency_depth_m:
+            self._previous = VelocityCommand.hover()
+            return SafetyFilterResult(
+                command=VelocityCommand.hover(),
+                emergency_stop=True,
+                reason="close_obstacle",
+                min_depth_m=min_depth,
+            )
+
+        clamped = command.clamp(
+            max_vx=self.config.max_vx_mps,
+            max_vy=self.config.max_vy_mps,
+            max_vz=self.config.max_vz_mps,
+            max_yaw_rate=self.config.max_yaw_rate_radps,
+        )
+        smoothed = clamped.smooth_toward(self._previous, self.config.smoothing_alpha)
+        self._previous = smoothed
+        return SafetyFilterResult(
+            command=smoothed,
+            emergency_stop=False,
+            reason="ok",
+            min_depth_m=min_depth,
+        )
+
+    def _coerce_command(
+        self,
+        predicted: VelocityCommand | np.ndarray | list[float] | tuple[float, ...],
+    ) -> VelocityCommand | None:
+        if isinstance(predicted, VelocityCommand):
+            return predicted
+        try:
+            return VelocityCommand.from_iterable(predicted)
+        except (TypeError, ValueError):
+            return None
+
+    def _min_valid_depth(self, depth_m: np.ndarray | None) -> float | None:
+        if depth_m is None:
+            return None
+        values = np.asarray(depth_m, dtype=np.float32)
+        finite_positive = values[np.isfinite(values) & (values > 0.0)]
+        total = max(int(values.size), 1)
+        invalid_fraction = 1.0 - (float(finite_positive.size) / float(total))
+        if invalid_fraction > self.config.invalid_depth_fraction_limit:
+            return 0.0
+        if finite_positive.size == 0:
+            return 0.0
+        return float(finite_positive.min())
