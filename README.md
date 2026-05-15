@@ -1,50 +1,50 @@
-# Simulator-first RGB-D Drone Pilot
+# Piloto de dron RGB-D orientado primero a simulacion
 
-This project is a Python scaffold for a reactive drone pilot:
+Este proyecto es una base en Python para un piloto reactivo de dron:
 
-`RGB + depth -> safe body-frame velocity command`
+`RGB + profundidad -> comando seguro de velocidad en el marco del cuerpo`
 
-The first target is closed-loop simulation. Real drone use is intentionally gated behind a safety checklist and should only send high-level velocity setpoints through a future adapter.
+El primer objetivo es la simulacion de lazo cerrado. El uso en un dron real queda intencionalmente bloqueado por una lista de seguridad y solo deberia enviar consignas de velocidad de alto nivel mediante un adaptador futuro.
 
-## Dataset strategy
+## Estrategia de datasets
 
-The local AirSim RGB/depth/commands dataset is treated as the supervised seed dataset because it has exact `[vx, vy, vz, yaw_rate]` labels. The manifest builder converts yaw rate from degrees per second to radians per second and stores commands in the internal standard:
+El dataset local de AirSim con RGB/profundidad/comandos se trata como dataset semilla supervisado porque tiene etiquetas exactas `[vx, vy, vz, yaw_rate]`. El generador de manifiestos convierte `yaw_rate` de grados por segundo a radianes por segundo y guarda los comandos en el estandar interno:
 
-- `vx`, `vy`, `vz`: meters per second
-- `yaw_rate`: radians per second
+- `vx`, `vy`, `vz`: metros por segundo
+- `yaw_rate`: radianes por segundo
 - `action_frame`: `body`
 
-Mid-Air and DDOS are intended as later manifest sources: Mid-Air can contribute pseudo-actions from pose deltas, while DDOS is better used for depth/perception robustness or auxiliary tasks.
+Mid-Air y DDOS quedan previstos como fuentes posteriores de manifiestos: Mid-Air puede aportar pseudoacciones derivadas de diferencias de pose, mientras que DDOS conviene mas para robustez de profundidad/percepcion o tareas auxiliares.
 
-## Quick start
+## Inicio rapido
 
-Run commands from the project root, not from inside `drone_autopilot/`:
+Ejecutar los comandos desde la raiz del proyecto, no desde dentro de `drone_autopilot/`:
 
 ```bash
 cd /home/spendice/Documents/Archivos_Facu/IA
 ```
 
-Build a manifest for the local AirSim seed dataset:
+Construir un manifiesto para el dataset semilla local de AirSim:
 
 ```bash
 python3 -m drone_autopilot.cli build-airsim-manifest \
   data_collected_potential_final_v58_mod25_320x320_cmds
 ```
 
-Inspect action statistics:
+Inspeccionar estadisticas de acciones:
 
 ```bash
 python3 -m drone_autopilot.cli stats \
   data_collected_potential_final_v58_mod25_320x320_cmds/manifest.parquet
 ```
 
-Install training dependencies before model training:
+Instalar las dependencias de entrenamiento antes de entrenar el modelo:
 
 ```bash
 python3 -m pip install -e ".[training,dev]"
 ```
 
-Train a small RGB-D pilot:
+Entrenar un piloto RGB-D chico:
 
 ```bash
 python3 -m drone_autopilot.cli train \
@@ -54,40 +54,40 @@ python3 -m drone_autopilot.cli train \
   --backbone mobilenet_v3_small
 ```
 
-The training code masks unavailable labels, normalizes actions from train-split statistics only, and reports per-output plus per-source metrics.
+El codigo de entrenamiento enmascara etiquetas no disponibles, normaliza acciones usando solo estadisticas del split de entrenamiento y reporta metricas por salida y por fuente.
 
-## Safety model
+## Modelo de seguridad
 
-The simulator adapter always runs predictions through `SafetyFilter` before a command is sent. The filter:
+El adaptador del simulador siempre pasa las predicciones por `SafetyFilter` antes de enviar un comando. El filtro:
 
-- rejects NaN or infinite predictions
-- clamps velocities and yaw rate
-- smooths successive commands
-- switches to hover/stop when depth indicates a close obstacle
+- rechaza predicciones NaN o infinitas
+- limita velocidades y `yaw_rate`
+- suaviza comandos sucesivos
+- cambia a hover/stop cuando la profundidad indica un obstaculo cercano
 
-The AirSim adapter is optional and imported only when used. If `airsim` is not installed, CLI simulator commands fail with a clear dependency message instead of breaking manifest and test workflows.
+El adaptador de AirSim es opcional y se importa solo cuando se usa. Si `airsim` no esta instalado, los comandos CLI del simulador fallan con un mensaje claro de dependencia en vez de romper los flujos de manifiestos y tests.
 
-## Real drone policy
+## Politica para dron real
 
-Real drones are out of scope for v1. A future MAVSDK/MAVLink/ROS adapter must keep these gates:
+Los drones reales quedan fuera del alcance de la v1. Un futuro adaptador MAVSDK/MAVLink/ROS debe mantener estos controles:
 
-- simulator validation first
-- manual override
-- geofence
-- bench tests
-- low-speed prop-guard tests
-- safety pilot
-- high-level velocity setpoints only
+- validacion previa en simulador
+- override manual
+- geocerca
+- pruebas de banco
+- pruebas de baja velocidad con protectores de helices
+- piloto de seguridad
+- solo consignas de velocidad de alto nivel
 
-## Verification
+## Verificacion
 
-Local checks that do not require PyTorch:
+Chequeos locales que no requieren PyTorch:
 
 ```bash
 python3 -m pytest
 ```
 
-Optional syntax check:
+Chequeo opcional de sintaxis:
 
 ```bash
 python3 -m compileall drone_autopilot tests
