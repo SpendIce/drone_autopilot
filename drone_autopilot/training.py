@@ -39,6 +39,7 @@ class TrainingConfig:
     max_depth_m: float = 50.0
     vy_weight: float = 0.25
     device: str = "auto"
+    multi_gpu: bool = True
 
 
 @dataclass(frozen=True)
@@ -166,6 +167,14 @@ def train(config: TrainingConfig) -> dict[str, object]:
 
     model_config = ModelConfig(backbone=config.backbone)
     model = build_model(model_config).to(device)
+    if (
+        config.multi_gpu
+        and device == "cuda"
+        and torch.cuda.device_count() > 1
+    ):
+        print(f"Using DataParallel with {torch.cuda.device_count()} CUDA devices")
+        model = torch.nn.DataParallel(model)
+
     optimizer = torch.optim.AdamW(model.parameters(), lr=config.learning_rate)
     action_weights = torch.tensor(
         [1.0, config.vy_weight, 1.0, 1.0],

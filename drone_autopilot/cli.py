@@ -92,6 +92,7 @@ def cmd_train(args: argparse.Namespace) -> int:
             max_depth_m=args.max_depth_m,
             vy_weight=args.vy_weight,
             device=args.device,
+            multi_gpu=args.multi_gpu,
         )
     )
     _print_json(result)
@@ -174,6 +175,8 @@ def build_parser() -> argparse.ArgumentParser:
     train_parser.add_argument("--max-depth-m", type=float, default=50.0)
     train_parser.add_argument("--vy-weight", type=float, default=0.25)
     train_parser.add_argument("--device", default="auto")
+    train_parser.add_argument("--no-multi-gpu", dest="multi_gpu", action="store_false")
+    train_parser.set_defaults(multi_gpu=True)
     train_parser.set_defaults(func=cmd_train)
 
     airsim = subparsers.add_parser("airsim-loop")

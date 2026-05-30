@@ -120,8 +120,9 @@ def save_checkpoint(
     extra: dict[str, Any] | None = None,
 ) -> None:
     torch_module, _module = _require_torch()
+    model_to_save = model.module if hasattr(model, "module") else model
     checkpoint = {
-        "model_state": model.state_dict(),
+        "model_state": model_to_save.state_dict(),
         "model_config": model_config.__dict__,
         "action_stats": {
             "mean": tuple(action_stats.mean),
@@ -132,11 +133,20 @@ def save_checkpoint(
     torch_module.save(checkpoint, path)
 
 
+def _strip_dataparallel_prefix(state_dict: dict[str, Any]) -> dict[str, Any]:
+    if not any(key.startswith("module.") for key in state_dict):
+        return state_dict
+    return {
+        key.removeprefix("module."): value
+        for key, value in state_dict.items()
+    }
+
+
 def load_checkpoint(path: Path | str, *, map_location: str = "cpu"):
     torch_module, _module = _require_torch()
     checkpoint = torch_module.load(path, map_location=map_location)
     config = ModelConfig(**checkpoint["model_config"])
     model = RgbdPilotNet(config)
-    model.load_state_dict(checkpoint["model_state"])
+    model.load_state_dict(_strip_dataparallel_prefix(checkpoint["model_state"]))
     model.eval()
     return model, checkpoint
