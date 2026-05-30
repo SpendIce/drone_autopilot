@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Sequence
+from typing import Any, Sequence
 
 import numpy as np
 
@@ -47,6 +47,18 @@ class MetricTable:
     mae: dict[str, float]
     rmse: dict[str, float]
     per_source_mae: dict[str, dict[str, float]]
+
+
+def _device_type(device: object) -> str:
+    return getattr(device, "type", str(device).split(":", maxsplit=1)[0])
+
+
+def _should_use_data_parallel(torch_module: Any, device: object, multi_gpu: bool) -> bool:
+    return (
+        multi_gpu
+        and _device_type(device) == "cuda"
+        and torch_module.cuda.device_count() > 1
+    )
 
 
 def _split_records(
@@ -167,11 +179,7 @@ def train(config: TrainingConfig) -> dict[str, object]:
 
     model_config = ModelConfig(backbone=config.backbone)
     model = build_model(model_config).to(device)
-    if (
-        config.multi_gpu
-        and device == "cuda"
-        and torch.cuda.device_count() > 1
-    ):
+    if _should_use_data_parallel(torch, device, config.multi_gpu):
         print(f"Using DataParallel with {torch.cuda.device_count()} CUDA devices")
         model = torch.nn.DataParallel(model)
 
