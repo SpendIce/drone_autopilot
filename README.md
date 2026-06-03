@@ -56,6 +56,26 @@ python3 -m drone_autopilot.cli train \
 
 El codigo de entrenamiento enmascara etiquetas no disponibles, normaliza acciones usando solo estadisticas del split de entrenamiento y reporta metricas por salida y por fuente.
 
+### Entrenamiento multi-GPU
+
+El modo multi-GPU recomendado usa `DistributedDataParallel` mediante `torchrun`. No uses `python -m ... --multi-gpu` como camino principal: ese modo mantiene `DataParallel` solo para pruebas, pero puede fallar en Kaggle T4 x2 con errores cuDNN.
+
+En Kaggle T4 x2, lanzar dos procesos, uno por GPU:
+
+```bash
+torchrun --standalone --nproc_per_node=2 -m drone_autopilot.cli train \
+  /kaggle/working/manifest.parquet \
+  --data-root /kaggle/input/datasets/lukpellant/droneflight-obs-avoidanceairsimrgbdepth10k-320x320/data_collected_potential_final_v58_mod25_320x320_cmds \
+  --backbone mobilenet_v3_small \
+  --image-size 224 \
+  --epochs 20 \
+  --batch-size 32 \
+  --distributed \
+  --output /kaggle/working/rgbd_mobilenet_v3_small_224_e20_ddp.pt
+```
+
+En modo distribuido, `--batch-size` es por GPU. Con `--nproc_per_node=2 --batch-size 32`, el batch efectivo global es 64.
+
 ## Modelo de seguridad
 
 El adaptador del simulador siempre pasa las predicciones por `SafetyFilter` antes de enviar un comando. El filtro:

@@ -2,7 +2,12 @@ from __future__ import annotations
 
 from drone_autopilot.cli import build_parser
 from drone_autopilot.models import _strip_dataparallel_prefix
-from drone_autopilot.training import _should_use_data_parallel
+from drone_autopilot.training import (
+    DistributedContext,
+    TrainingConfig,
+    _reduce_training_loss,
+    _should_use_data_parallel,
+)
 
 
 class _Cuda:
@@ -54,7 +59,34 @@ def test_cli_keeps_multi_gpu_opt_in() -> None:
     default_args = parser.parse_args(["train", "manifest.parquet"])
     multi_gpu_args = parser.parse_args(["train", "manifest.parquet", "--multi-gpu"])
     single_gpu_args = parser.parse_args(["train", "manifest.parquet", "--no-multi-gpu"])
+    distributed_args = parser.parse_args(["train", "manifest.parquet", "--distributed"])
 
     assert not default_args.multi_gpu
+    assert not default_args.distributed
     assert multi_gpu_args.multi_gpu
     assert not single_gpu_args.multi_gpu
+    assert distributed_args.distributed
+    assert not distributed_args.multi_gpu
+
+
+def test_training_config_uses_stable_single_gpu_default() -> None:
+    config = TrainingConfig(
+        manifest_path="manifest.parquet",  # type: ignore[arg-type]
+        data_root=".",  # type: ignore[arg-type]
+    )
+
+    assert not config.multi_gpu
+    assert not config.distributed
+
+
+def test_reduce_training_loss_is_noop_without_distributed_context() -> None:
+    running_loss, batches = _reduce_training_loss(
+        object(),
+        running_loss=3.0,
+        batches=2,
+        device="cpu",
+        context=DistributedContext(),
+    )
+
+    assert running_loss == 3.0
+    assert batches == 2

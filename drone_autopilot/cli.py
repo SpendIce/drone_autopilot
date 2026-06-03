@@ -93,9 +93,11 @@ def cmd_train(args: argparse.Namespace) -> int:
             vy_weight=args.vy_weight,
             device=args.device,
             multi_gpu=args.multi_gpu,
+            distributed=args.distributed,
         )
     )
-    _print_json(result)
+    if not result.pop("_suppress_cli_output", False):
+        _print_json(result)
     return 0
 
 
@@ -175,10 +177,11 @@ def build_parser() -> argparse.ArgumentParser:
     train_parser.add_argument("--max-depth-m", type=float, default=50.0)
     train_parser.add_argument("--vy-weight", type=float, default=0.25)
     train_parser.add_argument("--device", default="auto")
-    multi_gpu = train_parser.add_mutually_exclusive_group()
-    multi_gpu.add_argument("--multi-gpu", dest="multi_gpu", action="store_true")
-    multi_gpu.add_argument("--no-multi-gpu", dest="multi_gpu", action="store_false")
-    train_parser.set_defaults(multi_gpu=False)
+    gpu_mode = train_parser.add_mutually_exclusive_group()
+    gpu_mode.add_argument("--distributed", action="store_true")
+    gpu_mode.add_argument("--multi-gpu", dest="multi_gpu", action="store_true")
+    gpu_mode.add_argument("--no-multi-gpu", dest="multi_gpu", action="store_false")
+    train_parser.set_defaults(distributed=False, multi_gpu=False)
     train_parser.set_defaults(func=cmd_train)
 
     airsim = subparsers.add_parser("airsim-loop")
