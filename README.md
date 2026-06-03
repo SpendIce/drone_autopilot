@@ -90,6 +90,23 @@ El adaptador del simulador siempre pasa las predicciones por `SafetyFilter` ante
 
 El adaptador de AirSim es opcional y se importa solo cuando se usa. Si `airsim` no esta instalado, los comandos CLI del simulador fallan con un mensaje claro de dependencia en vez de romper los flujos de manifiestos y tests.
 
+### Dependencia AirSim
+
+El adaptador actual usa la API clasica de AirSim OSS: `airsim.MultirotorClient`, `simGetImages` y `moveByVelocityBodyFrameAsync`. Project AirSim no es retrocompatible como reemplazo directo: usa cliente `projectairsim`, objetos `World`/`Drone`, configuracion JSONC y metodos async con `asyncio`. Para Project AirSim haria falta un adaptador nuevo.
+
+En Python moderno, el paquete clasico `airsim==1.8.1` requiere instalar algunas dependencias legacy antes y desactivar build isolation:
+
+```bash
+python -m pip install msgpack-rpc-python backports.ssl_match_hostname
+python -m pip install --no-build-isolation "airsim==1.8.1"
+```
+
+Verificar cliente:
+
+```bash
+python -c "import airsim; print(airsim.MultirotorClient, airsim.ImageRequest, airsim.YawMode)"
+```
+
 ## Politica para dron real
 
 Los drones reales quedan fuera del alcance de la v1. Un futuro adaptador MAVSDK/MAVLink/ROS debe mantener estos controles:
