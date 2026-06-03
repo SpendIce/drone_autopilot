@@ -114,6 +114,19 @@ def _cleanup_distributed(torch_module: Any, context: DistributedContext) -> None
         torch_module.distributed.destroy_process_group()
 
 
+def _barrier(torch_module: Any, context: DistributedContext) -> None:
+    if not context.enabled:
+        return
+    try:
+        torch_module.distributed.barrier(device_ids=[context.local_rank])
+    except TypeError:
+        torch_module.distributed.barrier()
+
+
+def _unwrap_distributed_model(model: Any) -> Any:
+    return model.module if hasattr(model, "module") else model
+
+
 def _reduce_training_loss(
     torch_module: Any,
     *,
@@ -323,7 +336,7 @@ def train(config: TrainingConfig) -> dict[str, object]:
             row = {"epoch": float(epoch + 1), "train_loss": train_loss}
             if context.is_main and val_records:
                 val_metrics = evaluate_model(
-                    model,
+                    _unwrap_distributed_model(model),
                     val_records,
                     data_root=config.data_root,
                     action_stats=action_stats,
@@ -339,21 +352,21 @@ def train(config: TrainingConfig) -> dict[str, object]:
                 history.append(row)
                 print(row)
             if context.enabled:
-                torch.distributed.barrier()
+                _barrier(torch, context)
 
         result: dict[str, object]
         if context.is_main:
             config.output_path.parent.mkdir(parents=True, exist_ok=True)
             save_checkpoint(
                 config.output_path,
-                model=model,
+                model=_unwrap_distributed_model(model),
                 model_config=model_config,
                 action_stats=action_stats,
                 extra={"history": history, "modality": config.modality},
             )
 
             test_metrics = evaluate_model(
-                model,
+                _unwrap_distributed_model(model),
                 test_records,
                 data_root=config.data_root,
                 action_stats=action_stats,
@@ -374,7 +387,7 @@ def train(config: TrainingConfig) -> dict[str, object]:
             result = {"_suppress_cli_output": True}
 
         if context.enabled:
-            torch.distributed.barrier()
+            _barrier(torch, context)
         return result
     finally:
         _cleanup_distributed(torch, context)
