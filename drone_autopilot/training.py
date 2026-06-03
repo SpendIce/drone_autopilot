@@ -39,7 +39,7 @@ class TrainingConfig:
     max_depth_m: float = 50.0
     vy_weight: float = 0.25
     device: str = "auto"
-    multi_gpu: bool = True
+    multi_gpu: bool = False
 
 
 @dataclass(frozen=True)

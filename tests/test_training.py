@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from drone_autopilot.cli import build_parser
 from drone_autopilot.models import _strip_dataparallel_prefix
 from drone_autopilot.training import _should_use_data_parallel
 
@@ -45,3 +46,15 @@ def test_strip_dataparallel_prefix_keeps_checkpoint_keys_portable() -> None:
 
     assert set(stripped) == {"rgb_encoder.weight", "head.bias"}
     assert stripped["rgb_encoder.weight"] is state["module.rgb_encoder.weight"]
+
+
+def test_cli_keeps_multi_gpu_opt_in() -> None:
+    parser = build_parser()
+
+    default_args = parser.parse_args(["train", "manifest.parquet"])
+    multi_gpu_args = parser.parse_args(["train", "manifest.parquet", "--multi-gpu"])
+    single_gpu_args = parser.parse_args(["train", "manifest.parquet", "--no-multi-gpu"])
+
+    assert not default_args.multi_gpu
+    assert multi_gpu_args.multi_gpu
+    assert not single_gpu_args.multi_gpu
