@@ -71,10 +71,13 @@ torchrun --standalone --nproc_per_node=2 -m drone_autopilot.cli train \
   --epochs 20 \
   --batch-size 32 \
   --distributed \
-  --output /kaggle/working/rgbd_mobilenet_v3_small_224_e20_ddp.pt
+  --output /kaggle/working/rgbd_mobilenet_v3_small_224_e20_ddp_last.pt \
+  --best-output /kaggle/working/rgbd_mobilenet_v3_small_224_e20_ddp_best.pt
 ```
 
 En modo distribuido, `--batch-size` es por GPU. Con `--nproc_per_node=2 --batch-size 32`, el batch efectivo global es 64.
+
+El trainer guarda el ultimo checkpoint en `--output` y el mejor checkpoint de validacion en `--best-output`. La seleccion del mejor modelo usa `val_mae_vx + val_mae_vz + val_mae_yaw_rate`; `vy` queda fuera porque en el dataset semilla suele ser casi constante.
 
 ## Modelo de seguridad
 

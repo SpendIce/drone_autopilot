@@ -82,6 +82,7 @@ def cmd_train(args: argparse.Namespace) -> int:
             manifest_path=Path(args.manifest),
             data_root=Path(args.data_root),
             output_path=Path(args.output),
+            best_output_path=Path(args.best_output) if args.best_output else None,
             backbone=args.backbone,
             modality=args.modality,
             image_size=args.image_size,
@@ -167,6 +168,7 @@ def build_parser() -> argparse.ArgumentParser:
     train_parser.add_argument("manifest")
     train_parser.add_argument("--data-root", default=".")
     train_parser.add_argument("--output", default="checkpoints/rgbd_pilot.pt")
+    train_parser.add_argument("--best-output")
     train_parser.add_argument("--backbone", default="mobilenet_v3_small", choices=["mobilenet_v3_small", "resnet18", "tiny"])
     train_parser.add_argument("--modality", default="rgbd", choices=["rgb", "depth", "rgbd"])
     train_parser.add_argument("--image-size", type=int, default=224)

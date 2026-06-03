@@ -15,6 +15,13 @@ from .manifest import read_manifest
 from .models import ModelConfig, build_model, save_checkpoint
 from .core_types import ACTION_NAMES, DatasetManifestRecord
 
+BEST_VAL_SCORE_WEIGHTS = {
+    "vx": 1.0,
+    "vy": 0.0,
+    "vz": 1.0,
+    "yaw_rate": 1.0,
+}
+
 
 def _require_torch():
     try:
@@ -30,6 +37,7 @@ class TrainingConfig:
     manifest_path: Path
     data_root: Path
     output_path: Path = Path("checkpoints/rgbd_pilot.pt")
+    best_output_path: Path | None = None
     backbone: str = "mobilenet_v3_small"
     modality: str = "rgbd"
     image_size: int = 224
@@ -125,6 +133,27 @@ def _barrier(torch_module: Any, context: DistributedContext) -> None:
 
 def _unwrap_distributed_model(model: Any) -> Any:
     return model.module if hasattr(model, "module") else model
+
+
+def _default_best_output_path(output_path: Path | str) -> Path:
+    output_path = Path(output_path)
+    if output_path.suffix:
+        return output_path.with_name(f"{output_path.stem}_best{output_path.suffix}")
+    return output_path.with_name(f"{output_path.name}_best")
+
+
+def _validation_score(row: dict[str, float]) -> float | None:
+    score = 0.0
+    used = False
+    for name, weight in BEST_VAL_SCORE_WEIGHTS.items():
+        if weight == 0.0:
+            continue
+        key = f"val_mae_{name}"
+        if key not in row:
+            continue
+        score += row[key] * weight
+        used = True
+    return score if used else None
 
 
 def _reduce_training_loss(
@@ -302,6 +331,9 @@ def train(config: TrainingConfig) -> dict[str, object]:
     )
 
     history: list[dict[str, float]] = []
+    best_output_path = config.best_output_path or _default_best_output_path(config.output_path)
+    best_epoch: float | None = None
+    best_val_score: float | None = None
     try:
         for epoch in range(config.epochs):
             if train_sampler is not None:
@@ -348,6 +380,27 @@ def train(config: TrainingConfig) -> dict[str, object]:
                 )
                 for name, value in val_metrics.mae.items():
                     row[f"val_mae_{name}"] = value
+                val_score = _validation_score(row)
+                if val_score is not None:
+                    row["val_score"] = val_score
+                    if best_val_score is None or val_score < best_val_score:
+                        best_val_score = val_score
+                        best_epoch = row["epoch"]
+                        best_output_path.parent.mkdir(parents=True, exist_ok=True)
+                        save_checkpoint(
+                            best_output_path,
+                            model=_unwrap_distributed_model(model),
+                            model_config=model_config,
+                            action_stats=action_stats,
+                            extra={
+                                "history": [*history, row],
+                                "modality": config.modality,
+                                "checkpoint_kind": "best",
+                                "best_epoch": best_epoch,
+                                "best_val_score": best_val_score,
+                                "best_metric_weights": BEST_VAL_SCORE_WEIGHTS,
+                            },
+                        )
             if context.is_main:
                 history.append(row)
                 print(row)
@@ -362,7 +415,17 @@ def train(config: TrainingConfig) -> dict[str, object]:
                 model=_unwrap_distributed_model(model),
                 model_config=model_config,
                 action_stats=action_stats,
-                extra={"history": history, "modality": config.modality},
+                extra={
+                    "history": history,
+                    "modality": config.modality,
+                    "checkpoint_kind": "last",
+                    "best_checkpoint": (
+                        str(best_output_path) if best_val_score is not None else None
+                    ),
+                    "best_epoch": best_epoch,
+                    "best_val_score": best_val_score,
+                    "best_metric_weights": BEST_VAL_SCORE_WEIGHTS,
+                },
             )
 
             test_metrics = evaluate_model(
@@ -378,6 +441,11 @@ def train(config: TrainingConfig) -> dict[str, object]:
             )
             result = {
                 "checkpoint": str(config.output_path),
+                "best_checkpoint": (
+                    str(best_output_path) if best_val_score is not None else None
+                ),
+                "best_epoch": best_epoch,
+                "best_val_score": best_val_score,
                 "history": history,
                 "test_mae": test_metrics.mae,
                 "test_rmse": test_metrics.rmse,

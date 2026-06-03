@@ -1,14 +1,21 @@
 from __future__ import annotations
 
+from pathlib import Path
+
+import pytest
+
 from drone_autopilot.cli import build_parser
 from drone_autopilot.models import _strip_dataparallel_prefix
 from drone_autopilot.training import (
+    BEST_VAL_SCORE_WEIGHTS,
     DistributedContext,
     TrainingConfig,
     _barrier,
+    _default_best_output_path,
     _reduce_training_loss,
     _should_use_data_parallel,
     _unwrap_distributed_model,
+    _validation_score,
 )
 
 
@@ -89,6 +96,16 @@ def test_cli_keeps_multi_gpu_opt_in() -> None:
     assert not distributed_args.multi_gpu
 
 
+def test_cli_accepts_explicit_best_output_path() -> None:
+    parser = build_parser()
+
+    args = parser.parse_args(
+        ["train", "manifest.parquet", "--best-output", "checkpoints/best.pt"]
+    )
+
+    assert args.best_output == "checkpoints/best.pt"
+
+
 def test_training_config_uses_stable_single_gpu_default() -> None:
     config = TrainingConfig(
         manifest_path="manifest.parquet",  # type: ignore[arg-type]
@@ -110,6 +127,25 @@ def test_reduce_training_loss_is_noop_without_distributed_context() -> None:
 
     assert running_loss == 3.0
     assert batches == 2
+
+
+def test_default_best_output_path_adds_best_before_suffix() -> None:
+    assert (
+        _default_best_output_path("checkpoints/model.pt")
+        == Path("checkpoints/model_best.pt")
+    )
+
+
+def test_validation_score_ignores_vy_by_default() -> None:
+    row = {
+        "val_mae_vx": 0.3,
+        "val_mae_vy": 100.0,
+        "val_mae_vz": 0.2,
+        "val_mae_yaw_rate": 0.1,
+    }
+
+    assert BEST_VAL_SCORE_WEIGHTS["vy"] == 0.0
+    assert _validation_score(row) == pytest.approx(0.6)
 
 
 def test_unwrap_distributed_model_returns_inner_module() -> None:
