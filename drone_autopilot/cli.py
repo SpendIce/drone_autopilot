@@ -133,6 +133,7 @@ def cmd_airsim_loop(args: argparse.Namespace) -> int:
         scene_camera=args.scene_camera,
         depth_camera=args.depth_camera,
         invert_z=args.invert_z,
+        hold_altitude=args.hold_altitude,
     )
     adapter.connect(
         arm=args.arm,
@@ -245,6 +246,7 @@ def build_parser() -> argparse.ArgumentParser:
     airsim.add_argument("--emergency-depth", type=float, default=0.8)
     airsim.add_argument("--command-log")
     airsim.add_argument("--invert-z", action="store_true")
+    airsim.add_argument("--hold-altitude", action="store_true")
     airsim.add_argument("--arm", action="store_true")
     airsim.add_argument("--takeoff", action="store_true")
     airsim.add_argument("--takeoff-altitude", type=float)

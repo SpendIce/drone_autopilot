@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import math
+import time
 
 import numpy as np
 
@@ -39,6 +40,7 @@ class AirSimAdapter(SimulatorAdapter):
         depth_camera: str = "0",
         client=None,
         invert_z: bool = False,
+        hold_altitude: bool = False,
     ) -> None:
         self.airsim = _require_airsim()
         self.vehicle_name = vehicle_name
@@ -46,6 +48,8 @@ class AirSimAdapter(SimulatorAdapter):
         self.depth_camera = depth_camera
         self.client = client or self.airsim.MultirotorClient()
         self.invert_z = invert_z
+        self.hold_altitude = hold_altitude
+        self._hold_z_ned: float | None = None
 
     def connect(
         self,
@@ -68,6 +72,11 @@ class AirSimAdapter(SimulatorAdapter):
                 takeoff_velocity_mps,
                 vehicle_name=self.vehicle_name,
             ).join()
+            if self.hold_altitude:
+                self._hold_z_ned = z_ned
+        elif self.hold_altitude:
+            state = self.client.getMultirotorState(vehicle_name=self.vehicle_name)
+            self._hold_z_ned = float(state.kinematics_estimated.position.z_val)
 
     def capture_observation(self) -> Observation:
         requests = [
@@ -81,9 +90,19 @@ class AirSimAdapter(SimulatorAdapter):
         return Observation(rgb=rgb, depth_m=depth, timestamp=float(timestamp) if timestamp else None)
 
     def send_velocity(self, command: VelocityCommand, *, duration_s: float) -> None:
-        vz = -command.vz if self.invert_z else command.vz
         yaw_deg_s = math.degrees(command.yaw_rate)
         yaw_mode = self.airsim.YawMode(is_rate=True, yaw_or_rate=yaw_deg_s)
+        if self._hold_z_ned is not None:
+            self.client.moveByVelocityZBodyFrameAsync(
+                command.vx,
+                command.vy,
+                self._hold_z_ned,
+                duration_s,
+                yaw_mode=yaw_mode,
+                vehicle_name=self.vehicle_name,
+            ).join()
+            return
+        vz = -command.vz if self.invert_z else command.vz
         self.client.moveByVelocityBodyFrameAsync(
             command.vx,
             command.vy,
@@ -94,7 +113,9 @@ class AirSimAdapter(SimulatorAdapter):
         ).join()
 
     def hover(self, *, duration_s: float) -> None:
-        self.send_velocity(VelocityCommand.hover(), duration_s=duration_s)
+        self.client.hoverAsync(vehicle_name=self.vehicle_name).join()
+        if duration_s > 0.0:
+            time.sleep(duration_s)
 
     def close(self) -> None:
         self.client.enableApiControl(False, vehicle_name=self.vehicle_name)

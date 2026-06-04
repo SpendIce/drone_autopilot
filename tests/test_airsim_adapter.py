@@ -4,6 +4,7 @@ import pytest
 
 from drone_autopilot.simulators import airsim_adapter
 from drone_autopilot.simulators.airsim_adapter import AirSimAdapter, _depth_image_type
+from drone_autopilot.core_types import VelocityCommand
 
 
 class _ImageTypePlanar:
@@ -19,8 +20,15 @@ class _ImageTypeMissing:
     Scene = 0
 
 
+class _YawMode:
+    def __init__(self, *, is_rate: bool, yaw_or_rate: float) -> None:
+        self.is_rate = is_rate
+        self.yaw_or_rate = yaw_or_rate
+
+
 class _AirSimPlanar:
     ImageType = _ImageTypePlanar
+    YawMode = _YawMode
 
 
 class _AirSimPlanner:
@@ -60,6 +68,29 @@ class _Client:
         self.calls.append(("moveToZAsync", (z, velocity), {"vehicle_name": vehicle_name}))
         return _AsyncResult()
 
+    def hoverAsync(self, *, vehicle_name: str) -> _AsyncResult:
+        self.calls.append(("hoverAsync", (), {"vehicle_name": vehicle_name}))
+        return _AsyncResult()
+
+    def moveByVelocityZBodyFrameAsync(
+        self,
+        vx: float,
+        vy: float,
+        z: float,
+        duration: float,
+        *,
+        yaw_mode: _YawMode,
+        vehicle_name: str,
+    ) -> _AsyncResult:
+        self.calls.append(
+            (
+                "moveByVelocityZBodyFrameAsync",
+                (vx, vy, z, duration, yaw_mode.yaw_or_rate),
+                {"vehicle_name": vehicle_name},
+            )
+        )
+        return _AsyncResult()
+
 
 def test_depth_image_type_prefers_current_depth_planar_name() -> None:
     assert _depth_image_type(_AirSimPlanar) == _ImageTypePlanar.DepthPlanar
@@ -93,3 +124,31 @@ def test_connect_moves_to_requested_takeoff_altitude(monkeypatch: pytest.MonkeyP
         ("takeoffAsync", (), {"vehicle_name": "Drone1"}),
         ("moveToZAsync", (-3.0, 1.5), {"vehicle_name": "Drone1"}),
     ]
+
+
+def test_hover_uses_airsim_hover_async(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setattr(airsim_adapter, "_require_airsim", lambda: _AirSimPlanar)
+    monkeypatch.setattr(airsim_adapter.time, "sleep", lambda duration: None)
+    client = _Client()
+    adapter = AirSimAdapter(client=client, vehicle_name="Drone1")
+
+    adapter.hover(duration_s=0.1)
+
+    assert client.calls == [("hoverAsync", (), {"vehicle_name": "Drone1"})]
+
+
+def test_hold_altitude_uses_takeoff_altitude_for_body_frame_velocity(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setattr(airsim_adapter, "_require_airsim", lambda: _AirSimPlanar)
+    client = _Client()
+    adapter = AirSimAdapter(client=client, vehicle_name="Drone1", hold_altitude=True)
+    adapter.connect(takeoff_altitude_m=3.0)
+
+    adapter.send_velocity(VelocityCommand(0.4, 0.1, -0.5, 0.2), duration_s=0.05)
+
+    assert client.calls[-1] == (
+        "moveByVelocityZBodyFrameAsync",
+        (0.4, 0.1, -3.0, 0.05, pytest.approx(11.459155902616466)),
+        {"vehicle_name": "Drone1"},
+    )
