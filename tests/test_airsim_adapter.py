@@ -40,6 +40,22 @@ class _AirSimPlanar:
     YawMode = _YawMode
     ImageRequest = _ImageRequest
 
+    @staticmethod
+    def Pose(position: _Vector, orientation: _Quaternion) -> _Pose:
+        return _Pose(position, orientation)
+
+    @staticmethod
+    def Vector3r(x: float, y: float, z: float) -> _Vector:
+        return _Vector(x, y, z)
+
+    @staticmethod
+    def to_quaternion(_pitch: float, _roll: float, yaw: float) -> _Quaternion:
+        return _Quaternion(0.0, 0.0, yaw, 1.0)
+
+    @staticmethod
+    def to_eularian_angles(_quaternion: _Quaternion) -> tuple[float, float, float]:
+        return (0.0, 0.0, 0.0)
+
 
 class _AirSimPlanner:
     ImageType = _ImageTypePlanner
@@ -68,11 +84,26 @@ class _Kinematics:
     def __init__(self) -> None:
         self.position = _Vector(1.0, 2.0, -3.0)
         self.linear_velocity = _Vector(0.1, 0.2, -0.3)
+        self.orientation = _Quaternion(0.0, 0.0, 0.0, 1.0)
 
 
 class _State:
     def __init__(self) -> None:
         self.kinematics_estimated = _Kinematics()
+
+
+class _Quaternion:
+    def __init__(self, x: float, y: float, z: float, w: float) -> None:
+        self.x_val = x
+        self.y_val = y
+        self.z_val = z
+        self.w_val = w
+
+
+class _Pose:
+    def __init__(self, position: _Vector, orientation: _Quaternion) -> None:
+        self.position = position
+        self.orientation = orientation
 
 
 class _Collision:
@@ -150,6 +181,15 @@ class _Client:
     def simGetCollisionInfo(self, *, vehicle_name: str) -> _Collision:
         self.calls.append(("simGetCollisionInfo", (), {"vehicle_name": vehicle_name}))
         return _Collision()
+
+    def simSetVehiclePose(self, pose: _Pose, ignore_collision: bool, *, vehicle_name: str) -> None:
+        self.calls.append(
+            (
+                "simSetVehiclePose",
+                (pose, ignore_collision),
+                {"vehicle_name": vehicle_name},
+            )
+        )
 
     def simGetImages(self, requests: list[_ImageRequest], *, vehicle_name: str):
         self.calls.append(
@@ -289,9 +329,31 @@ def test_capture_state_returns_pose_velocity_and_collision(
         "vx": 0.1,
         "vy": 0.2,
         "vz": -0.3,
+        "yaw": 0.0,
         "collided": False,
         "collision_object": "",
     }
+
+
+def test_set_pose_uses_current_defaults_and_updates_hold_altitude(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setattr(airsim_adapter, "_require_airsim", lambda: _AirSimPlanar)
+    client = _Client()
+    adapter = AirSimAdapter(client=client, vehicle_name="Drone1", hold_altitude=True)
+
+    adapter.set_pose(x=5.0, y=-2.0, yaw_rad=0.25)
+    adapter.send_velocity(VelocityCommand(0.4, 0.0, 0.0, 0.0), duration_s=0.1)
+
+    pose_call = client.calls[1]
+    assert pose_call[0] == "simSetVehiclePose"
+    pose = pose_call[1][0]
+    assert pose.position.x_val == pytest.approx(5.0)
+    assert pose.position.y_val == pytest.approx(-2.0)
+    assert pose.position.z_val == pytest.approx(-3.0)
+    assert pose.orientation.z_val == pytest.approx(0.25)
+    assert client.calls[-1][0] == "moveByVelocityZBodyFrameAsync"
+    assert client.calls[-1][1][2] == pytest.approx(-3.0)
 
 
 def test_capture_observation_reuses_depth_until_interval(

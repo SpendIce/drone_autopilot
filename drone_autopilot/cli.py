@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import argparse
 import json
+import math
 from pathlib import Path
 from typing import Any
 
@@ -16,10 +17,18 @@ from .manifest import (
     write_manifest,
 )
 from .core_types import ACTION_NAMES
+from .mission import Waypoint, parse_waypoint
 
 
 def _print_json(payload: dict[str, Any]) -> None:
     print(json.dumps(payload, indent=2, sort_keys=True))
+
+
+def _parse_waypoint_arg(value: str) -> Waypoint:
+    try:
+        return parse_waypoint(value)
+    except ValueError as exc:
+        raise argparse.ArgumentTypeError(str(exc)) from exc
 
 
 def cmd_build_airsim_manifest(args: argparse.Namespace) -> int:
@@ -104,6 +113,7 @@ def cmd_train(args: argparse.Namespace) -> int:
 
 def cmd_airsim_loop(args: argparse.Namespace) -> int:
     from .inference import TorchPilotPolicy
+    from .mission import MissionConfig, MissionPlanner
     from .safety import SafetyConfig, SafetyFilter
     from .simulators.airsim_adapter import AirSimAdapter
     from .simulators.base import run_closed_loop
@@ -148,6 +158,33 @@ def cmd_airsim_loop(args: argparse.Namespace) -> int:
         takeoff_altitude_m=args.takeoff_altitude,
         takeoff_velocity_mps=args.takeoff_velocity,
     )
+    if any(
+        value is not None
+        for value in (args.start_x, args.start_y, args.start_z, args.start_yaw_deg)
+    ):
+        adapter.set_pose(
+            x=args.start_x,
+            y=args.start_y,
+            z=args.start_z,
+            yaw_rad=math.radians(args.start_yaw_deg)
+            if args.start_yaw_deg is not None
+            else None,
+        )
+    mission_planner = None
+    waypoints = args.waypoint or []
+    if waypoints:
+        mission_planner = MissionPlanner(
+            waypoints,
+            MissionConfig(
+                cruise_speed_mps=args.mission_cruise_speed,
+                waypoint_radius_m=args.mission_waypoint_radius,
+                slow_radius_m=args.mission_slow_radius,
+                position_blend=args.mission_position_blend,
+                yaw_blend=args.mission_yaw_blend,
+                heading_gain=args.mission_heading_gain,
+                max_goal_yaw_rate_radps=args.mission_max_yaw_rate,
+            ),
+        )
     metrics = run_closed_loop(
         adapter,
         policy,
@@ -155,6 +192,7 @@ def cmd_airsim_loop(args: argparse.Namespace) -> int:
         steps=args.steps,
         command_duration_s=args.command_duration,
         command_log_path=Path(args.command_log) if args.command_log else None,
+        mission_planner=mission_planner,
     )
     _print_json(metrics.to_dict())
     return 0
@@ -265,6 +303,18 @@ def build_parser() -> argparse.ArgumentParser:
     airsim.add_argument("--takeoff", action="store_true")
     airsim.add_argument("--takeoff-altitude", type=float)
     airsim.add_argument("--takeoff-velocity", type=float, default=1.0)
+    airsim.add_argument("--start-x", type=float)
+    airsim.add_argument("--start-y", type=float)
+    airsim.add_argument("--start-z", type=float, help="AirSim NED z coordinate; altitude 3m is -3.0")
+    airsim.add_argument("--start-yaw-deg", type=float)
+    airsim.add_argument("--waypoint", action="append", type=_parse_waypoint_arg)
+    airsim.add_argument("--mission-cruise-speed", type=float, default=0.45)
+    airsim.add_argument("--mission-waypoint-radius", type=float, default=1.5)
+    airsim.add_argument("--mission-slow-radius", type=float, default=4.0)
+    airsim.add_argument("--mission-position-blend", type=float, default=0.45)
+    airsim.add_argument("--mission-yaw-blend", type=float, default=0.5)
+    airsim.add_argument("--mission-heading-gain", type=float, default=0.8)
+    airsim.add_argument("--mission-max-yaw-rate", type=float, default=0.25)
     airsim.set_defaults(func=cmd_airsim_loop)
 
     snapshot = subparsers.add_parser("airsim-snapshot")

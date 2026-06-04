@@ -147,6 +147,8 @@ class AirSimAdapter(SimulatorAdapter):
         state = self.client.getMultirotorState(vehicle_name=self.vehicle_name)
         position = state.kinematics_estimated.position
         velocity = state.kinematics_estimated.linear_velocity
+        orientation = state.kinematics_estimated.orientation
+        _, _, yaw = self.airsim.to_eularian_angles(orientation)
         collision = self.client.simGetCollisionInfo(vehicle_name=self.vehicle_name)
         return {
             "x": float(position.x_val),
@@ -155,9 +157,41 @@ class AirSimAdapter(SimulatorAdapter):
             "vx": float(velocity.x_val),
             "vy": float(velocity.y_val),
             "vz": float(velocity.z_val),
+            "yaw": float(yaw),
             "collided": bool(collision.has_collided),
             "collision_object": str(collision.object_name),
         }
+
+    def set_pose(
+        self,
+        *,
+        x: float | None = None,
+        y: float | None = None,
+        z: float | None = None,
+        yaw_rad: float | None = None,
+        ignore_collision: bool = True,
+    ) -> None:
+        state = self.client.getMultirotorState(vehicle_name=self.vehicle_name)
+        position = state.kinematics_estimated.position
+        orientation = state.kinematics_estimated.orientation
+        _, _, current_yaw = self.airsim.to_eularian_angles(orientation)
+        target_x = float(position.x_val if x is None else x)
+        target_y = float(position.y_val if y is None else y)
+        target_z = float(position.z_val if z is None else z)
+        target_yaw = float(current_yaw if yaw_rad is None else yaw_rad)
+        pose = self.airsim.Pose(
+            self.airsim.Vector3r(target_x, target_y, target_z),
+            self.airsim.to_quaternion(0.0, 0.0, target_yaw),
+        )
+        self.client.simSetVehiclePose(
+            pose,
+            ignore_collision,
+            vehicle_name=self.vehicle_name,
+        )
+        if self.hold_altitude:
+            self._hold_z_ned = target_z
+        self._last_depth_m = None
+        self._capture_count = 0
 
     def close(self) -> None:
         if self.release_control_on_close:

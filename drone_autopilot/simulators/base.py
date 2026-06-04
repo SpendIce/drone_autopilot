@@ -11,6 +11,7 @@ from typing import Any, Protocol
 
 import numpy as np
 
+from ..mission import MissionOutput, MissionPlanner
 from ..safety import SafetyFilter, SafetyFilterResult
 from ..core_types import VelocityCommand
 
@@ -63,6 +64,9 @@ class ClosedLoopMetrics:
     command_elapsed_s: float = 0.0
     state_elapsed_s: float = 0.0
     step_elapsed_s: float = 0.0
+    mission_complete: bool = False
+    mission_active_index: int | None = None
+    mission_last_distance_m: float | None = None
     reasons: dict[str, int] = field(default_factory=dict)
 
     def update(
@@ -107,6 +111,13 @@ class ClosedLoopMetrics:
         self.state_elapsed_s += state_s
         self.step_elapsed_s += step_s
 
+    def record_mission(self, mission: MissionOutput | None) -> None:
+        if mission is None:
+            return
+        self.mission_complete = mission.mission_complete
+        self.mission_active_index = mission.active_index
+        self.mission_last_distance_m = mission.distance_to_waypoint_m
+
     def to_dict(self) -> dict[str, object]:
         mean_abs_predicted_yaw = self.predicted_yaw_abs_sum / max(self.steps, 1)
         mean_abs_command_yaw = self.command_yaw_abs_sum / max(self.steps, 1)
@@ -128,6 +139,9 @@ class ClosedLoopMetrics:
             "mean_abs_predicted_yaw_rate": mean_abs_predicted_yaw,
             "mean_abs_command_yaw_rate": mean_abs_command_yaw,
             "command_yaw_sign_changes": self.command_yaw_sign_changes,
+            "mission_complete": self.mission_complete,
+            "mission_active_index": self.mission_active_index,
+            "mission_last_distance_m": self.mission_last_distance_m,
             "reasons": self.reasons,
         }
 
@@ -140,6 +154,7 @@ def run_closed_loop(
     steps: int,
     command_duration_s: float = 0.1,
     command_log_path: Path | str | None = None,
+    mission_planner: MissionPlanner | None = None,
 ) -> ClosedLoopMetrics:
     metrics = ClosedLoopMetrics()
     previous = VelocityCommand.hover()
@@ -158,10 +173,25 @@ def run_closed_loop(
                 "predicted_vy",
                 "predicted_vz",
                 "predicted_yaw_rate",
+                "planned_vx",
+                "planned_vy",
+                "planned_vz",
+                "planned_yaw_rate",
                 "command_vx",
                 "command_vy",
                 "command_vz",
                 "command_yaw_rate",
+                "mission_active_index",
+                "mission_target_x",
+                "mission_target_y",
+                "mission_distance_m",
+                "mission_yaw_error_rad",
+                "mission_reached_waypoint",
+                "mission_complete",
+                "mission_reason",
+                "mission_state_x",
+                "mission_state_y",
+                "mission_state_yaw",
                 "emergency_stop",
                 "reason",
                 "min_depth_m",
@@ -191,8 +221,19 @@ def run_closed_loop(
             phase_started_at = time.perf_counter()
             prediction = policy.predict(observation.rgb, observation.depth_m)
             predict_s = time.perf_counter() - phase_started_at
+            mission_state: dict[str, Any] = {}
+            mission_output: MissionOutput | None = None
+            planned = prediction
+            if mission_planner is not None:
+                phase_started_at = time.perf_counter()
+                mission_state = adapter.capture_state()
+                mission_output = mission_planner.update(prediction, mission_state)
+                planned = mission_output.command
+                mission_state_s = time.perf_counter() - phase_started_at
+            else:
+                mission_state_s = 0.0
             phase_started_at = time.perf_counter()
-            result = safety_filter.filter(prediction, depth_m=observation.depth_m)
+            result = safety_filter.filter(planned, depth_m=observation.depth_m)
             filter_s = time.perf_counter() - phase_started_at
             phase_started_at = time.perf_counter()
             if result.emergency_stop:
@@ -206,8 +247,10 @@ def run_closed_loop(
                 phase_started_at = time.perf_counter()
                 state = adapter.capture_state()
                 state_s = time.perf_counter() - phase_started_at
+            state_s += mission_state_s
             step_s = time.perf_counter() - step_started_at
             if log_writer is not None:
+                target = mission_output.target if mission_output is not None else None
                 log_writer.writerow(
                     {
                         "step": metrics.steps + 1,
@@ -215,10 +258,25 @@ def run_closed_loop(
                         "predicted_vy": prediction.vy,
                         "predicted_vz": prediction.vz,
                         "predicted_yaw_rate": prediction.yaw_rate,
+                        "planned_vx": planned.vx,
+                        "planned_vy": planned.vy,
+                        "planned_vz": planned.vz,
+                        "planned_yaw_rate": planned.yaw_rate,
                         "command_vx": result.command.vx,
                         "command_vy": result.command.vy,
                         "command_vz": result.command.vz,
                         "command_yaw_rate": result.command.yaw_rate,
+                        "mission_active_index": mission_output.active_index if mission_output is not None else None,
+                        "mission_target_x": target.x if target is not None else None,
+                        "mission_target_y": target.y if target is not None else None,
+                        "mission_distance_m": mission_output.distance_to_waypoint_m if mission_output is not None else None,
+                        "mission_yaw_error_rad": mission_output.yaw_error_rad if mission_output is not None else None,
+                        "mission_reached_waypoint": mission_output.reached_waypoint if mission_output is not None else None,
+                        "mission_complete": mission_output.mission_complete if mission_output is not None else None,
+                        "mission_reason": mission_output.reason if mission_output is not None else None,
+                        "mission_state_x": mission_state.get("x"),
+                        "mission_state_y": mission_state.get("y"),
+                        "mission_state_yaw": mission_state.get("yaw"),
                         "emergency_stop": result.emergency_stop,
                         "reason": result.reason,
                         "min_depth_m": result.min_depth_m,
@@ -239,6 +297,7 @@ def run_closed_loop(
                     }
                 )
             metrics.update(prediction=prediction, result=result, previous_command=previous)
+            metrics.record_mission(mission_output)
             metrics.record_timing(
                 capture_s=capture_s,
                 predict_s=predict_s,
