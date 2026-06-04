@@ -19,6 +19,15 @@ def _require_airsim():
     return airsim
 
 
+def _depth_image_type(airsim_module):  # type: ignore[no-untyped-def]
+    image_type = airsim_module.ImageType
+    if hasattr(image_type, "DepthPlanar"):
+        return image_type.DepthPlanar
+    if hasattr(image_type, "DepthPlanner"):
+        return image_type.DepthPlanner
+    raise RuntimeError("AirSim ImageType has neither DepthPlanar nor DepthPlanner")
+
+
 class AirSimAdapter(SimulatorAdapter):
     """Capture RGB/depth and send body-frame velocity commands in AirSim."""
 
@@ -49,7 +58,7 @@ class AirSimAdapter(SimulatorAdapter):
     def capture_observation(self) -> Observation:
         requests = [
             self.airsim.ImageRequest(self.scene_camera, self.airsim.ImageType.Scene, False, False),
-            self.airsim.ImageRequest(self.depth_camera, self.airsim.ImageType.DepthPlanner, True, False),
+            self.airsim.ImageRequest(self.depth_camera, _depth_image_type(self.airsim), True, False),
         ]
         scene_response, depth_response = self.client.simGetImages(requests, vehicle_name=self.vehicle_name)
         rgb = self._scene_response_to_rgb(scene_response)
