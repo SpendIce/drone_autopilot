@@ -212,6 +212,30 @@ def test_hover_uses_airsim_hover_async(monkeypatch: pytest.MonkeyPatch) -> None:
     assert client.calls == [("hoverAsync", (), {"vehicle_name": "Drone1"})]
 
 
+def test_close_releases_api_control_by_default(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setattr(airsim_adapter, "_require_airsim", lambda: _AirSimPlanar)
+    client = _Client()
+    adapter = AirSimAdapter(client=client, vehicle_name="Drone1")
+
+    adapter.close()
+
+    assert client.calls == [("enableApiControl", (False,), {"vehicle_name": "Drone1"})]
+
+
+def test_close_can_hover_and_keep_api_control(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setattr(airsim_adapter, "_require_airsim", lambda: _AirSimPlanar)
+    client = _Client()
+    adapter = AirSimAdapter(
+        client=client,
+        vehicle_name="Drone1",
+        release_control_on_close=False,
+    )
+
+    adapter.close()
+
+    assert client.calls == [("hoverAsync", (), {"vehicle_name": "Drone1"})]
+
+
 def test_hold_altitude_uses_takeoff_altitude_for_body_frame_velocity(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:

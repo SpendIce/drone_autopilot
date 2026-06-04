@@ -46,6 +46,28 @@ def test_safety_filter_hovers_on_close_depth() -> None:
     assert result.min_depth_m == pytest.approx(0.9)
 
 
+def test_safety_filter_uses_configured_depth_roi_for_emergency_stop() -> None:
+    safety = SafetyFilter(
+        SafetyConfig(
+            emergency_depth_m=1.0,
+            depth_roi_bottom=0.7,
+        )
+    )
+    depth = np.full((10, 10), 3.0, dtype=np.float32)
+    depth[7:, :] = 0.5
+
+    result = safety.filter([1.0, 0.0, 0.0, 0.0], depth_m=depth)
+
+    assert not result.emergency_stop
+    assert result.reason == "ok"
+    assert result.min_depth_m == pytest.approx(3.0)
+
+
+def test_safety_filter_rejects_invalid_depth_roi() -> None:
+    with pytest.raises(ValueError, match="depth ROI"):
+        SafetyFilter(SafetyConfig(depth_roi_top=0.8, depth_roi_bottom=0.7))
+
+
 def test_safety_filter_zeros_targets_below_deadbands() -> None:
     safety = SafetyFilter(
         SafetyConfig(

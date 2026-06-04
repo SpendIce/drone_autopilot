@@ -22,6 +22,10 @@ class SafetyConfig:
     yaw_rate_deadband_radps: float = 0.0
     emergency_depth_m: float = 0.8
     invalid_depth_fraction_limit: float = 0.8
+    depth_roi_top: float = 0.0
+    depth_roi_bottom: float = 1.0
+    depth_roi_left: float = 0.0
+    depth_roi_right: float = 1.0
 
 
 @dataclass(frozen=True)
@@ -37,6 +41,7 @@ class SafetyFilter:
 
     def __init__(self, config: SafetyConfig | None = None) -> None:
         self.config = config or SafetyConfig()
+        self._validate_depth_roi()
         self._previous = VelocityCommand.hover()
 
     def reset(self) -> None:
@@ -97,7 +102,7 @@ class SafetyFilter:
     def _min_valid_depth(self, depth_m: np.ndarray | None) -> float | None:
         if depth_m is None:
             return None
-        values = np.asarray(depth_m, dtype=np.float32)
+        values = self._depth_roi(np.asarray(depth_m, dtype=np.float32))
         finite_positive = values[np.isfinite(values) & (values > 0.0)]
         total = max(int(values.size), 1)
         invalid_fraction = 1.0 - (float(finite_positive.size) / float(total))
@@ -106,6 +111,28 @@ class SafetyFilter:
         if finite_positive.size == 0:
             return 0.0
         return float(finite_positive.min())
+
+    def _depth_roi(self, values: np.ndarray) -> np.ndarray:
+        height, width = values.shape[:2]
+        top = int(round(height * self.config.depth_roi_top))
+        bottom = int(round(height * self.config.depth_roi_bottom))
+        left = int(round(width * self.config.depth_roi_left))
+        right = int(round(width * self.config.depth_roi_right))
+        return values[top:bottom, left:right]
+
+    def _validate_depth_roi(self) -> None:
+        roi = (
+            self.config.depth_roi_top,
+            self.config.depth_roi_bottom,
+            self.config.depth_roi_left,
+            self.config.depth_roi_right,
+        )
+        if any(value < 0.0 or value > 1.0 for value in roi):
+            raise ValueError("depth ROI bounds must be within [0.0, 1.0]")
+        if self.config.depth_roi_top >= self.config.depth_roi_bottom:
+            raise ValueError("depth ROI top must be less than bottom")
+        if self.config.depth_roi_left >= self.config.depth_roi_right:
+            raise ValueError("depth ROI left must be less than right")
 
     def _apply_deadbands(self, command: VelocityCommand) -> VelocityCommand:
         return VelocityCommand(

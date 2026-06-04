@@ -126,6 +126,10 @@ def cmd_airsim_loop(args: argparse.Namespace) -> int:
             vz_deadband_mps=args.vz_deadband,
             yaw_rate_deadband_radps=args.yaw_deadband,
             emergency_depth_m=args.emergency_depth,
+            depth_roi_top=args.depth_roi_top,
+            depth_roi_bottom=args.depth_roi_bottom,
+            depth_roi_left=args.depth_roi_left,
+            depth_roi_right=args.depth_roi_right,
         )
     )
     adapter = AirSimAdapter(
@@ -136,6 +140,7 @@ def cmd_airsim_loop(args: argparse.Namespace) -> int:
         hold_altitude=args.hold_altitude,
         wait_for_commands=not args.async_commands,
         depth_capture_interval=args.depth_interval,
+        release_control_on_close=not args.keep_api_control,
     )
     adapter.connect(
         arm=args.arm,
@@ -246,10 +251,15 @@ def build_parser() -> argparse.ArgumentParser:
     airsim.add_argument("--vz-deadband", type=float, default=0.02)
     airsim.add_argument("--yaw-deadband", type=float, default=0.05)
     airsim.add_argument("--emergency-depth", type=float, default=0.8)
+    airsim.add_argument("--depth-roi-top", type=float, default=0.0)
+    airsim.add_argument("--depth-roi-bottom", type=float, default=1.0)
+    airsim.add_argument("--depth-roi-left", type=float, default=0.0)
+    airsim.add_argument("--depth-roi-right", type=float, default=1.0)
     airsim.add_argument("--command-log")
     airsim.add_argument("--invert-z", action="store_true")
     airsim.add_argument("--hold-altitude", action="store_true")
     airsim.add_argument("--async-commands", action="store_true")
+    airsim.add_argument("--keep-api-control", action="store_true")
     airsim.add_argument("--depth-interval", type=int, default=1)
     airsim.add_argument("--arm", action="store_true")
     airsim.add_argument("--takeoff", action="store_true")

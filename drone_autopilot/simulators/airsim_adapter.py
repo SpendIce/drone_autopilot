@@ -43,6 +43,7 @@ class AirSimAdapter(SimulatorAdapter):
         hold_altitude: bool = False,
         wait_for_commands: bool = True,
         depth_capture_interval: int = 1,
+        release_control_on_close: bool = True,
     ) -> None:
         if depth_capture_interval < 1:
             raise ValueError("depth_capture_interval must be at least 1")
@@ -55,6 +56,7 @@ class AirSimAdapter(SimulatorAdapter):
         self.hold_altitude = hold_altitude
         self.wait_for_commands = wait_for_commands
         self.depth_capture_interval = depth_capture_interval
+        self.release_control_on_close = release_control_on_close
         self._hold_z_ned: float | None = None
         self._last_depth_m: np.ndarray | None = None
         self._capture_count = 0
@@ -158,7 +160,10 @@ class AirSimAdapter(SimulatorAdapter):
         }
 
     def close(self) -> None:
-        self.client.enableApiControl(False, vehicle_name=self.vehicle_name)
+        if self.release_control_on_close:
+            self.client.enableApiControl(False, vehicle_name=self.vehicle_name)
+            return
+        self.client.hoverAsync(vehicle_name=self.vehicle_name).join()
 
     def _scene_response_to_rgb(self, response) -> np.ndarray:  # type: ignore[no-untyped-def]
         if response.height <= 0 or response.width <= 0:
