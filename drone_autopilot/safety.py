@@ -73,8 +73,8 @@ class SafetyFilter:
             max_vz=self.config.max_vz_mps,
             max_yaw_rate=self.config.max_yaw_rate_radps,
         )
-        smoothed = clamped.smooth_toward(self._previous, self.config.smoothing_alpha)
-        filtered = self._apply_deadbands(smoothed)
+        target = self._apply_deadbands(clamped)
+        filtered = target.smooth_toward(self._previous, self.config.smoothing_alpha)
         self._previous = filtered
         return SafetyFilterResult(
             command=filtered,

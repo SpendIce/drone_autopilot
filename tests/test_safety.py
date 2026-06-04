@@ -46,7 +46,7 @@ def test_safety_filter_hovers_on_close_depth() -> None:
     assert result.min_depth_m == pytest.approx(0.9)
 
 
-def test_safety_filter_applies_deadbands_after_smoothing() -> None:
+def test_safety_filter_zeros_targets_below_deadbands() -> None:
     safety = SafetyFilter(
         SafetyConfig(
             smoothing_alpha=1.0,
@@ -75,3 +75,19 @@ def test_safety_filter_keeps_commands_above_deadbands() -> None:
     result = safety.filter([0.11, 0.0, 0.0, -0.11])
 
     assert result.command == VelocityCommand(0.11, 0.0, 0.0, -0.11)
+
+
+def test_safety_filter_deadband_does_not_block_smoothed_ramp() -> None:
+    safety = SafetyFilter(
+        SafetyConfig(
+            max_yaw_rate_radps=0.18,
+            smoothing_alpha=0.15,
+            yaw_rate_deadband_radps=0.08,
+        )
+    )
+
+    first = safety.filter([0.0, 0.0, 0.0, 0.43])
+    second = safety.filter([0.0, 0.0, 0.0, 0.43])
+
+    assert first.command.yaw_rate == pytest.approx(0.027)
+    assert second.command.yaw_rate == pytest.approx(0.04995)
