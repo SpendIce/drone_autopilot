@@ -47,9 +47,37 @@ class _AsyncResult:
         self.joined = True
 
 
+class _Vector:
+    def __init__(self, x: float, y: float, z: float) -> None:
+        self.x_val = x
+        self.y_val = y
+        self.z_val = z
+
+
+class _Kinematics:
+    def __init__(self) -> None:
+        self.position = _Vector(1.0, 2.0, -3.0)
+        self.linear_velocity = _Vector(0.1, 0.2, -0.3)
+
+
+class _State:
+    def __init__(self) -> None:
+        self.kinematics_estimated = _Kinematics()
+
+
+class _Collision:
+    has_collided = False
+    object_name = ""
+
+
 class _Client:
     def __init__(self) -> None:
         self.calls: list[tuple[str, tuple[object, ...], dict[str, object]]] = []
+        self.last_async_result: _AsyncResult | None = None
+
+    def _async_result(self) -> _AsyncResult:
+        self.last_async_result = _AsyncResult()
+        return self.last_async_result
 
     def confirmConnection(self) -> None:
         self.calls.append(("confirmConnection", (), {}))
@@ -62,15 +90,15 @@ class _Client:
 
     def takeoffAsync(self, *, vehicle_name: str) -> _AsyncResult:
         self.calls.append(("takeoffAsync", (), {"vehicle_name": vehicle_name}))
-        return _AsyncResult()
+        return self._async_result()
 
     def moveToZAsync(self, z: float, velocity: float, *, vehicle_name: str) -> _AsyncResult:
         self.calls.append(("moveToZAsync", (z, velocity), {"vehicle_name": vehicle_name}))
-        return _AsyncResult()
+        return self._async_result()
 
     def hoverAsync(self, *, vehicle_name: str) -> _AsyncResult:
         self.calls.append(("hoverAsync", (), {"vehicle_name": vehicle_name}))
-        return _AsyncResult()
+        return self._async_result()
 
     def moveByVelocityZBodyFrameAsync(
         self,
@@ -89,7 +117,15 @@ class _Client:
                 {"vehicle_name": vehicle_name},
             )
         )
-        return _AsyncResult()
+        return self._async_result()
+
+    def getMultirotorState(self, *, vehicle_name: str) -> _State:
+        self.calls.append(("getMultirotorState", (), {"vehicle_name": vehicle_name}))
+        return _State()
+
+    def simGetCollisionInfo(self, *, vehicle_name: str) -> _Collision:
+        self.calls.append(("simGetCollisionInfo", (), {"vehicle_name": vehicle_name}))
+        return _Collision()
 
 
 def test_depth_image_type_prefers_current_depth_planar_name() -> None:
@@ -152,3 +188,44 @@ def test_hold_altitude_uses_takeoff_altitude_for_body_frame_velocity(
         (0.4, 0.1, -3.0, 0.05, pytest.approx(11.459155902616466)),
         {"vehicle_name": "Drone1"},
     )
+    assert client.last_async_result is not None
+    assert client.last_async_result.joined
+
+
+def test_async_commands_do_not_wait_for_velocity_future(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setattr(airsim_adapter, "_require_airsim", lambda: _AirSimPlanar)
+    client = _Client()
+    adapter = AirSimAdapter(
+        client=client,
+        vehicle_name="Drone1",
+        hold_altitude=True,
+        wait_for_commands=False,
+    )
+    adapter.connect(takeoff_altitude_m=3.0)
+
+    adapter.send_velocity(VelocityCommand(0.4, 0.1, 0.0, 0.2), duration_s=0.5)
+
+    assert client.last_async_result is not None
+    assert not client.last_async_result.joined
+
+
+def test_capture_state_returns_pose_velocity_and_collision(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setattr(airsim_adapter, "_require_airsim", lambda: _AirSimPlanar)
+    adapter = AirSimAdapter(client=_Client(), vehicle_name="Drone1")
+
+    state = adapter.capture_state()
+
+    assert state == {
+        "x": 1.0,
+        "y": 2.0,
+        "z": -3.0,
+        "vx": 0.1,
+        "vy": 0.2,
+        "vz": -0.3,
+        "collided": False,
+        "collision_object": "",
+    }

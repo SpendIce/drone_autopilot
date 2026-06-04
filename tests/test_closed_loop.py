@@ -45,4 +45,6 @@ def test_closed_loop_writes_command_log_and_yaw_metrics(tmp_path) -> None:
 
     assert metrics.steps == 2
     assert metrics.to_dict()["mean_abs_predicted_yaw_rate"] == pytest.approx(0.1)
-    assert log_path.read_text(encoding="utf-8").splitlines()[0].startswith("step,")
+    header = log_path.read_text(encoding="utf-8").splitlines()[0]
+    assert header.startswith("step,")
+    assert "state_z" in header

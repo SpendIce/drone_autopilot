@@ -41,6 +41,7 @@ class AirSimAdapter(SimulatorAdapter):
         client=None,
         invert_z: bool = False,
         hold_altitude: bool = False,
+        wait_for_commands: bool = True,
     ) -> None:
         self.airsim = _require_airsim()
         self.vehicle_name = vehicle_name
@@ -49,6 +50,7 @@ class AirSimAdapter(SimulatorAdapter):
         self.client = client or self.airsim.MultirotorClient()
         self.invert_z = invert_z
         self.hold_altitude = hold_altitude
+        self.wait_for_commands = wait_for_commands
         self._hold_z_ned: float | None = None
 
     def connect(
@@ -93,29 +95,49 @@ class AirSimAdapter(SimulatorAdapter):
         yaw_deg_s = math.degrees(command.yaw_rate)
         yaw_mode = self.airsim.YawMode(is_rate=True, yaw_or_rate=yaw_deg_s)
         if self._hold_z_ned is not None:
-            self.client.moveByVelocityZBodyFrameAsync(
+            task = self.client.moveByVelocityZBodyFrameAsync(
                 command.vx,
                 command.vy,
                 self._hold_z_ned,
                 duration_s,
                 yaw_mode=yaw_mode,
                 vehicle_name=self.vehicle_name,
-            ).join()
+            )
+            if self.wait_for_commands:
+                task.join()
             return
         vz = -command.vz if self.invert_z else command.vz
-        self.client.moveByVelocityBodyFrameAsync(
+        task = self.client.moveByVelocityBodyFrameAsync(
             command.vx,
             command.vy,
             vz,
             duration_s,
             yaw_mode=yaw_mode,
             vehicle_name=self.vehicle_name,
-        ).join()
+        )
+        if self.wait_for_commands:
+            task.join()
 
     def hover(self, *, duration_s: float) -> None:
         self.client.hoverAsync(vehicle_name=self.vehicle_name).join()
         if duration_s > 0.0:
             time.sleep(duration_s)
+
+    def capture_state(self) -> dict[str, object]:
+        state = self.client.getMultirotorState(vehicle_name=self.vehicle_name)
+        position = state.kinematics_estimated.position
+        velocity = state.kinematics_estimated.linear_velocity
+        collision = self.client.simGetCollisionInfo(vehicle_name=self.vehicle_name)
+        return {
+            "x": float(position.x_val),
+            "y": float(position.y_val),
+            "z": float(position.z_val),
+            "vx": float(velocity.x_val),
+            "vy": float(velocity.y_val),
+            "vz": float(velocity.z_val),
+            "collided": bool(collision.has_collided),
+            "collision_object": str(collision.object_name),
+        }
 
     def close(self) -> None:
         self.client.enableApiControl(False, vehicle_name=self.vehicle_name)
