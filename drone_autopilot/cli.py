@@ -152,6 +152,32 @@ def cmd_airsim_loop(args: argparse.Namespace) -> int:
     return 0
 
 
+def cmd_airsim_snapshot(args: argparse.Namespace) -> int:
+    from .debug import save_observation_snapshot
+    from .simulators.airsim_adapter import AirSimAdapter
+
+    adapter = AirSimAdapter(
+        vehicle_name=args.vehicle_name,
+        scene_camera=args.scene_camera,
+        depth_camera=args.depth_camera,
+        invert_z=args.invert_z,
+    )
+    adapter.connect(
+        arm=args.arm,
+        takeoff=args.takeoff,
+        takeoff_altitude_m=args.takeoff_altitude,
+        takeoff_velocity_mps=args.takeoff_velocity,
+    )
+    observation = adapter.capture_observation()
+    summary = save_observation_snapshot(
+        observation,
+        Path(args.output_dir),
+        depth_vis_max_m=args.depth_vis_max,
+    )
+    _print_json(summary)
+    return 0
+
+
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(prog="drone-autopilot")
     subparsers = parser.add_subparsers(dest="command", required=True)
@@ -224,6 +250,19 @@ def build_parser() -> argparse.ArgumentParser:
     airsim.add_argument("--takeoff-altitude", type=float)
     airsim.add_argument("--takeoff-velocity", type=float, default=1.0)
     airsim.set_defaults(func=cmd_airsim_loop)
+
+    snapshot = subparsers.add_parser("airsim-snapshot")
+    snapshot.add_argument("--output-dir", default="runs/airsim_snapshot")
+    snapshot.add_argument("--vehicle-name", default="")
+    snapshot.add_argument("--scene-camera", default="0")
+    snapshot.add_argument("--depth-camera", default="0")
+    snapshot.add_argument("--depth-vis-max", type=float, default=10.0)
+    snapshot.add_argument("--invert-z", action="store_true")
+    snapshot.add_argument("--arm", action="store_true")
+    snapshot.add_argument("--takeoff", action="store_true")
+    snapshot.add_argument("--takeoff-altitude", type=float)
+    snapshot.add_argument("--takeoff-velocity", type=float, default=1.0)
+    snapshot.set_defaults(func=cmd_airsim_snapshot)
 
     return parser
 
