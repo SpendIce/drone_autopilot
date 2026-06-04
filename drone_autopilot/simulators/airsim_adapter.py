@@ -42,7 +42,10 @@ class AirSimAdapter(SimulatorAdapter):
         invert_z: bool = False,
         hold_altitude: bool = False,
         wait_for_commands: bool = True,
+        depth_capture_interval: int = 1,
     ) -> None:
+        if depth_capture_interval < 1:
+            raise ValueError("depth_capture_interval must be at least 1")
         self.airsim = _require_airsim()
         self.vehicle_name = vehicle_name
         self.scene_camera = scene_camera
@@ -51,7 +54,10 @@ class AirSimAdapter(SimulatorAdapter):
         self.invert_z = invert_z
         self.hold_altitude = hold_altitude
         self.wait_for_commands = wait_for_commands
+        self.depth_capture_interval = depth_capture_interval
         self._hold_z_ned: float | None = None
+        self._last_depth_m: np.ndarray | None = None
+        self._capture_count = 0
 
     def connect(
         self,
@@ -81,13 +87,25 @@ class AirSimAdapter(SimulatorAdapter):
             self._hold_z_ned = float(state.kinematics_estimated.position.z_val)
 
     def capture_observation(self) -> Observation:
+        should_capture_depth = (
+            self._last_depth_m is None
+            or self.depth_capture_interval == 1
+            or self._capture_count % self.depth_capture_interval == 0
+        )
         requests = [
             self.airsim.ImageRequest(self.scene_camera, self.airsim.ImageType.Scene, False, False),
-            self.airsim.ImageRequest(self.depth_camera, _depth_image_type(self.airsim), True, False),
         ]
-        scene_response, depth_response = self.client.simGetImages(requests, vehicle_name=self.vehicle_name)
+        if should_capture_depth:
+            requests.append(self.airsim.ImageRequest(self.depth_camera, _depth_image_type(self.airsim), True, False))
+        responses = self.client.simGetImages(requests, vehicle_name=self.vehicle_name)
+        scene_response = responses[0]
         rgb = self._scene_response_to_rgb(scene_response)
-        depth = self._depth_response_to_array(depth_response)
+        if should_capture_depth:
+            self._last_depth_m = self._depth_response_to_array(responses[1])
+        if self._last_depth_m is None:
+            raise RuntimeError("AirSim depth capture did not produce a reusable depth frame")
+        depth = self._last_depth_m
+        self._capture_count += 1
         timestamp = getattr(scene_response, "time_stamp", None)
         return Observation(rgb=rgb, depth_m=depth, timestamp=float(timestamp) if timestamp else None)
 

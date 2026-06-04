@@ -57,6 +57,12 @@ class ClosedLoopMetrics:
     command_yaw_abs_sum: float = 0.0
     command_yaw_sign_changes: int = 0
     elapsed_s: float = 0.0
+    capture_elapsed_s: float = 0.0
+    predict_elapsed_s: float = 0.0
+    filter_elapsed_s: float = 0.0
+    command_elapsed_s: float = 0.0
+    state_elapsed_s: float = 0.0
+    step_elapsed_s: float = 0.0
     reasons: dict[str, int] = field(default_factory=dict)
 
     def update(
@@ -84,14 +90,38 @@ class ClosedLoopMetrics:
         if previous_sign != 0.0 and current_sign != 0.0 and previous_sign != current_sign:
             self.command_yaw_sign_changes += 1
 
+    def record_timing(
+        self,
+        *,
+        capture_s: float,
+        predict_s: float,
+        filter_s: float,
+        command_s: float,
+        state_s: float,
+        step_s: float,
+    ) -> None:
+        self.capture_elapsed_s += capture_s
+        self.predict_elapsed_s += predict_s
+        self.filter_elapsed_s += filter_s
+        self.command_elapsed_s += command_s
+        self.state_elapsed_s += state_s
+        self.step_elapsed_s += step_s
+
     def to_dict(self) -> dict[str, object]:
         mean_abs_predicted_yaw = self.predicted_yaw_abs_sum / max(self.steps, 1)
         mean_abs_command_yaw = self.command_yaw_abs_sum / max(self.steps, 1)
         mean_step_hz = float(self.steps / self.elapsed_s) if self.elapsed_s > 0.0 else 0.0
+        divisor = max(self.steps, 1)
         return {
             "steps": self.steps,
             "elapsed_s": self.elapsed_s,
             "mean_step_hz": mean_step_hz,
+            "mean_capture_s": self.capture_elapsed_s / divisor,
+            "mean_predict_s": self.predict_elapsed_s / divisor,
+            "mean_filter_s": self.filter_elapsed_s / divisor,
+            "mean_command_s": self.command_elapsed_s / divisor,
+            "mean_state_s": self.state_elapsed_s / divisor,
+            "mean_step_s": self.step_elapsed_s / divisor,
             "emergency_stops": self.emergency_stops,
             "min_depth_m": self.min_depth_m,
             "command_smoothness": self.command_smoothness,
@@ -135,6 +165,12 @@ def run_closed_loop(
                 "emergency_stop",
                 "reason",
                 "min_depth_m",
+                "capture_s",
+                "predict_s",
+                "filter_s",
+                "command_s",
+                "state_s",
+                "step_s",
                 "state_x",
                 "state_y",
                 "state_z",
@@ -148,15 +184,30 @@ def run_closed_loop(
         log_writer.writeheader()
     try:
         for _ in range(steps):
+            step_started_at = time.perf_counter()
+            phase_started_at = step_started_at
             observation = adapter.capture_observation()
+            capture_s = time.perf_counter() - phase_started_at
+            phase_started_at = time.perf_counter()
             prediction = policy.predict(observation.rgb, observation.depth_m)
+            predict_s = time.perf_counter() - phase_started_at
+            phase_started_at = time.perf_counter()
             result = safety_filter.filter(prediction, depth_m=observation.depth_m)
+            filter_s = time.perf_counter() - phase_started_at
+            phase_started_at = time.perf_counter()
             if result.emergency_stop:
                 adapter.hover(duration_s=command_duration_s)
             else:
                 adapter.send_velocity(result.command, duration_s=command_duration_s)
+            command_s = time.perf_counter() - phase_started_at
+            state_s = 0.0
+            state: dict[str, Any] = {}
             if log_writer is not None:
+                phase_started_at = time.perf_counter()
                 state = adapter.capture_state()
+                state_s = time.perf_counter() - phase_started_at
+            step_s = time.perf_counter() - step_started_at
+            if log_writer is not None:
                 log_writer.writerow(
                     {
                         "step": metrics.steps + 1,
@@ -171,6 +222,12 @@ def run_closed_loop(
                         "emergency_stop": result.emergency_stop,
                         "reason": result.reason,
                         "min_depth_m": result.min_depth_m,
+                        "capture_s": capture_s,
+                        "predict_s": predict_s,
+                        "filter_s": filter_s,
+                        "command_s": command_s,
+                        "state_s": state_s,
+                        "step_s": step_s,
                         "state_x": state.get("x"),
                         "state_y": state.get("y"),
                         "state_z": state.get("z"),
@@ -182,6 +239,14 @@ def run_closed_loop(
                     }
                 )
             metrics.update(prediction=prediction, result=result, previous_command=previous)
+            metrics.record_timing(
+                capture_s=capture_s,
+                predict_s=predict_s,
+                filter_s=filter_s,
+                command_s=command_s,
+                state_s=state_s,
+                step_s=step_s,
+            )
             previous = result.command
     finally:
         metrics.elapsed_s = time.perf_counter() - started_at

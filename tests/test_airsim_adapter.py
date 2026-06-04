@@ -8,6 +8,7 @@ from drone_autopilot.core_types import VelocityCommand
 
 
 class _ImageTypePlanar:
+    Scene = 0
     DepthPlanar = 1
     DepthPlanner = 2
 
@@ -26,9 +27,18 @@ class _YawMode:
         self.yaw_or_rate = yaw_or_rate
 
 
+class _ImageRequest:
+    def __init__(self, camera: str, image_type: int, pixels_as_float: bool, compress: bool) -> None:
+        self.camera = camera
+        self.image_type = image_type
+        self.pixels_as_float = pixels_as_float
+        self.compress = compress
+
+
 class _AirSimPlanar:
     ImageType = _ImageTypePlanar
     YawMode = _YawMode
+    ImageRequest = _ImageRequest
 
 
 class _AirSimPlanner:
@@ -70,10 +80,24 @@ class _Collision:
     object_name = ""
 
 
+class _ImageResponse:
+    def __init__(self, *, image_type: int, depth_value: float = 1.0) -> None:
+        self.height = 2
+        self.width = 2
+        self.time_stamp = 123
+        if image_type == _ImageTypePlanar.Scene:
+            self.image_data_uint8 = bytes([0, 0, 0] * self.height * self.width)
+            self.image_data_float = []
+        else:
+            self.image_data_uint8 = b""
+            self.image_data_float = [depth_value] * self.height * self.width
+
+
 class _Client:
     def __init__(self) -> None:
         self.calls: list[tuple[str, tuple[object, ...], dict[str, object]]] = []
         self.last_async_result: _AsyncResult | None = None
+        self.depth_value = 1.0
 
     def _async_result(self) -> _AsyncResult:
         self.last_async_result = _AsyncResult()
@@ -126,6 +150,21 @@ class _Client:
     def simGetCollisionInfo(self, *, vehicle_name: str) -> _Collision:
         self.calls.append(("simGetCollisionInfo", (), {"vehicle_name": vehicle_name}))
         return _Collision()
+
+    def simGetImages(self, requests: list[_ImageRequest], *, vehicle_name: str):
+        self.calls.append(
+            (
+                "simGetImages",
+                (tuple(request.image_type for request in requests),),
+                {"vehicle_name": vehicle_name},
+            )
+        )
+        responses = []
+        for request in requests:
+            responses.append(_ImageResponse(image_type=request.image_type, depth_value=self.depth_value))
+            if request.image_type != _ImageTypePlanar.Scene:
+                self.depth_value += 1.0
+        return responses
 
 
 def test_depth_image_type_prefers_current_depth_planar_name() -> None:
@@ -229,3 +268,32 @@ def test_capture_state_returns_pose_velocity_and_collision(
         "collided": False,
         "collision_object": "",
     }
+
+
+def test_capture_observation_reuses_depth_until_interval(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setattr(airsim_adapter, "_require_airsim", lambda: _AirSimPlanar)
+    client = _Client()
+    adapter = AirSimAdapter(client=client, vehicle_name="Drone1", depth_capture_interval=3)
+
+    observations = [adapter.capture_observation() for _ in range(5)]
+
+    image_calls = [call for call in client.calls if call[0] == "simGetImages"]
+    assert [call[1][0] for call in image_calls] == [
+        (_ImageTypePlanar.Scene, _ImageTypePlanar.DepthPlanar),
+        (_ImageTypePlanar.Scene,),
+        (_ImageTypePlanar.Scene,),
+        (_ImageTypePlanar.Scene, _ImageTypePlanar.DepthPlanar),
+        (_ImageTypePlanar.Scene,),
+    ]
+    assert observations[0].depth_m[0, 0] == pytest.approx(1.0)
+    assert observations[2].depth_m[0, 0] == pytest.approx(1.0)
+    assert observations[3].depth_m[0, 0] == pytest.approx(2.0)
+
+
+def test_depth_capture_interval_must_be_positive(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setattr(airsim_adapter, "_require_airsim", lambda: _AirSimPlanar)
+
+    with pytest.raises(ValueError, match="at least 1"):
+        AirSimAdapter(client=_Client(), depth_capture_interval=0)
