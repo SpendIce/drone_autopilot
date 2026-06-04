@@ -134,7 +134,12 @@ def cmd_airsim_loop(args: argparse.Namespace) -> int:
         depth_camera=args.depth_camera,
         invert_z=args.invert_z,
     )
-    adapter.connect(arm=args.arm, takeoff=args.takeoff)
+    adapter.connect(
+        arm=args.arm,
+        takeoff=args.takeoff,
+        takeoff_altitude_m=args.takeoff_altitude,
+        takeoff_velocity_mps=args.takeoff_velocity,
+    )
     metrics = run_closed_loop(
         adapter,
         policy,
@@ -216,6 +221,8 @@ def build_parser() -> argparse.ArgumentParser:
     airsim.add_argument("--invert-z", action="store_true")
     airsim.add_argument("--arm", action="store_true")
     airsim.add_argument("--takeoff", action="store_true")
+    airsim.add_argument("--takeoff-altitude", type=float)
+    airsim.add_argument("--takeoff-velocity", type=float, default=1.0)
     airsim.set_defaults(func=cmd_airsim_loop)
 
     return parser

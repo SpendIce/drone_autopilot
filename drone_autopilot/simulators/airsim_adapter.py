@@ -47,13 +47,27 @@ class AirSimAdapter(SimulatorAdapter):
         self.client = client or self.airsim.MultirotorClient()
         self.invert_z = invert_z
 
-    def connect(self, *, arm: bool = False, takeoff: bool = False) -> None:
+    def connect(
+        self,
+        *,
+        arm: bool = False,
+        takeoff: bool = False,
+        takeoff_altitude_m: float | None = None,
+        takeoff_velocity_mps: float = 1.0,
+    ) -> None:
         self.client.confirmConnection()
         self.client.enableApiControl(True, vehicle_name=self.vehicle_name)
         if arm:
             self.client.armDisarm(True, vehicle_name=self.vehicle_name)
         if takeoff:
             self.client.takeoffAsync(vehicle_name=self.vehicle_name).join()
+        if takeoff_altitude_m is not None:
+            z_ned = -abs(takeoff_altitude_m)
+            self.client.moveToZAsync(
+                z_ned,
+                takeoff_velocity_mps,
+                vehicle_name=self.vehicle_name,
+            ).join()
 
     def capture_observation(self) -> Observation:
         requests = [
