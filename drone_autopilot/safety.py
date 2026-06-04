@@ -16,6 +16,10 @@ class SafetyConfig:
     max_vz_mps: float = 1.0
     max_yaw_rate_radps: float = 0.8
     smoothing_alpha: float = 0.35
+    vx_deadband_mps: float = 0.0
+    vy_deadband_mps: float = 0.0
+    vz_deadband_mps: float = 0.0
+    yaw_rate_deadband_radps: float = 0.0
     emergency_depth_m: float = 0.8
     invalid_depth_fraction_limit: float = 0.8
 
@@ -70,9 +74,10 @@ class SafetyFilter:
             max_yaw_rate=self.config.max_yaw_rate_radps,
         )
         smoothed = clamped.smooth_toward(self._previous, self.config.smoothing_alpha)
-        self._previous = smoothed
+        filtered = self._apply_deadbands(smoothed)
+        self._previous = filtered
         return SafetyFilterResult(
-            command=smoothed,
+            command=filtered,
             emergency_stop=False,
             reason="ok",
             min_depth_m=min_depth,
@@ -101,3 +106,16 @@ class SafetyFilter:
         if finite_positive.size == 0:
             return 0.0
         return float(finite_positive.min())
+
+    def _apply_deadbands(self, command: VelocityCommand) -> VelocityCommand:
+        return VelocityCommand(
+            vx=self._zero_below(command.vx, self.config.vx_deadband_mps),
+            vy=self._zero_below(command.vy, self.config.vy_deadband_mps),
+            vz=self._zero_below(command.vz, self.config.vz_deadband_mps),
+            yaw_rate=self._zero_below(command.yaw_rate, self.config.yaw_rate_deadband_radps),
+        )
+
+    def _zero_below(self, value: float, threshold: float) -> float:
+        if threshold < 0.0:
+            raise ValueError("deadband thresholds must be non-negative")
+        return 0.0 if abs(value) < threshold else value

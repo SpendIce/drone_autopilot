@@ -44,3 +44,34 @@ def test_safety_filter_hovers_on_close_depth() -> None:
     assert result.reason == "close_obstacle"
     assert result.command == VelocityCommand.hover()
     assert result.min_depth_m == pytest.approx(0.9)
+
+
+def test_safety_filter_applies_deadbands_after_smoothing() -> None:
+    safety = SafetyFilter(
+        SafetyConfig(
+            smoothing_alpha=1.0,
+            vx_deadband_mps=0.1,
+            vy_deadband_mps=0.1,
+            vz_deadband_mps=0.1,
+            yaw_rate_deadband_radps=0.1,
+        )
+    )
+
+    result = safety.filter([0.09, -0.09, 0.09, -0.09])
+
+    assert not result.emergency_stop
+    assert result.command == VelocityCommand.hover()
+
+
+def test_safety_filter_keeps_commands_above_deadbands() -> None:
+    safety = SafetyFilter(
+        SafetyConfig(
+            smoothing_alpha=1.0,
+            vx_deadband_mps=0.1,
+            yaw_rate_deadband_radps=0.1,
+        )
+    )
+
+    result = safety.filter([0.11, 0.0, 0.0, -0.11])
+
+    assert result.command == VelocityCommand(0.11, 0.0, 0.0, -0.11)

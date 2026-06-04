@@ -120,6 +120,11 @@ def cmd_airsim_loop(args: argparse.Namespace) -> int:
             max_vy_mps=args.max_vy,
             max_vz_mps=args.max_vz,
             max_yaw_rate_radps=args.max_yaw_rate,
+            smoothing_alpha=args.smoothing_alpha,
+            vx_deadband_mps=args.vx_deadband,
+            vy_deadband_mps=args.vy_deadband,
+            vz_deadband_mps=args.vz_deadband,
+            yaw_rate_deadband_radps=args.yaw_deadband,
             emergency_depth_m=args.emergency_depth,
         )
     )
@@ -136,8 +141,9 @@ def cmd_airsim_loop(args: argparse.Namespace) -> int:
         safety_filter,
         steps=args.steps,
         command_duration_s=args.command_duration,
+        command_log_path=Path(args.command_log) if args.command_log else None,
     )
-    _print_json(metrics.__dict__)
+    _print_json(metrics.to_dict())
     return 0
 
 
@@ -200,7 +206,13 @@ def build_parser() -> argparse.ArgumentParser:
     airsim.add_argument("--max-vy", type=float, default=1.0)
     airsim.add_argument("--max-vz", type=float, default=1.0)
     airsim.add_argument("--max-yaw-rate", type=float, default=0.8)
+    airsim.add_argument("--smoothing-alpha", type=float, default=0.2)
+    airsim.add_argument("--vx-deadband", type=float, default=0.0)
+    airsim.add_argument("--vy-deadband", type=float, default=0.02)
+    airsim.add_argument("--vz-deadband", type=float, default=0.02)
+    airsim.add_argument("--yaw-deadband", type=float, default=0.05)
     airsim.add_argument("--emergency-depth", type=float, default=0.8)
+    airsim.add_argument("--command-log")
     airsim.add_argument("--invert-z", action="store_true")
     airsim.add_argument("--arm", action="store_true")
     airsim.add_argument("--takeoff", action="store_true")
