@@ -1,0 +1,255 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Lección 6 — Lógica de Primer Orden</title>
+  <link rel="stylesheet" href="../assets/course.css" />
+  <style>
+    .formula {
+      display: block;
+      margin: 0.8rem 0;
+      padding: 0.65rem 0.8rem;
+      border: 1px solid var(--rule);
+      border-radius: 6px;
+      background: #fff;
+      font-family: ui-monospace, "SF Mono", "Cascadia Code", Menlo, monospace;
+      font-size: 0.95rem;
+      line-height: 1.45;
+      overflow-x: auto;
+      white-space: nowrap;
+    }
+    .translation-steps {
+      counter-reset: step;
+      list-style: none;
+      padding: 0;
+      margin: 1.2rem 0;
+    }
+    .translation-steps li {
+      counter-increment: step;
+      border: 1px solid var(--rule);
+      border-radius: 6px;
+      background: #fff;
+      padding: 0.65rem 0.75rem 0.65rem 2.55rem;
+      margin: 0.55rem 0;
+      position: relative;
+    }
+    .translation-steps li::before {
+      content: counter(step);
+      position: absolute;
+      left: 0.75rem;
+      top: 0.7rem;
+      width: 1.25rem;
+      height: 1.25rem;
+      border-radius: 999px;
+      background: var(--accent);
+      color: #fff;
+      font-family: ui-sans-serif, system-ui, sans-serif;
+      font-size: 0.72rem;
+      line-height: 1.25rem;
+      text-align: center;
+      font-weight: 700;
+    }
+    .symbol-grid {
+      display: grid;
+      grid-template-columns: repeat(2, 1fr);
+      gap: 0.6rem;
+      margin: 1.2rem 0;
+      font-family: ui-sans-serif, system-ui, sans-serif;
+      font-size: 0.9rem;
+    }
+    .symbol-grid div {
+      border: 1px solid var(--rule);
+      border-radius: 6px;
+      padding: 0.65rem;
+      background: #fff;
+    }
+    .symbol-grid strong {
+      display: block;
+      color: var(--accent);
+      margin-bottom: 0.2rem;
+    }
+    @media (max-width: 560px) {
+      .symbol-grid { grid-template-columns: 1fr; }
+    }
+  </style>
+</head>
+<body>
+  <p class="kicker">Lección 6 · Curso IA — Parcial Vegega</p>
+  <h1>Lógica de Primer Orden: traducir sin perder el sentido</h1>
+  <p class="meta">Esta lección cubre la base teórica del ejercicio 3: pasar frases en lenguaje
+  natural a Lógica de Primer Orden. La meta no es hacer veinte ejercicios: es aprender la
+  regla que evita los errores grandes. ~10 min.</p>
+
+  <div class="box exam">
+    <span class="box-label">Mapeo al parcial</span>
+    El ejercicio 3 pide traducción de frases. Lo importante es elegir bien
+    <strong>predicados</strong>, <strong>variables</strong>, <strong>constantes</strong>,
+    <strong>cuantificadores</strong> y conectores. La trampa central: no se traduce igual
+    "todos" que "algunos".
+  </div>
+
+  <h2>1. Por qué IA usa lógica</h2>
+  <p>La presentación de la cátedra ubica la lógica como una forma de
+  <strong>representar conocimiento</strong> y de <strong>realizar deducciones</strong>. En
+  Sistemas Inteligentes, eso importa porque el conocimiento debe quedar escrito de manera que
+  una computadora pueda usarlo.</p>
+
+  <div class="box key">
+    <span class="box-label">Idea central</span>
+    La Lógica Proposicional sirve para frases completas con valor de verdad. La
+    <strong>Lógica de Primer Orden</strong> baja un nivel: permite hablar de objetos del
+    dominio, sus propiedades y sus relaciones. Por eso aparecen variables, constantes,
+    predicados y cuantificadores.
+  </div>
+
+  <h2>2. Las piezas de LPO</h2>
+  <div class="symbol-grid">
+    <div>
+      <strong>Operadores lógicos</strong>
+      Relacionan hechos: ¬, ∧, ∨, →, ↔.
+    </div>
+    <div>
+      <strong>Variables</strong>
+      Objetos indeterminados del dominio: x, y, z.
+    </div>
+    <div>
+      <strong>Constantes</strong>
+      Objetos determinados del dominio: a, b, c.
+    </div>
+    <div>
+      <strong>Predicados</strong>
+      Propiedades o relaciones: Humano(x), Traza(x, y).
+    </div>
+    <div>
+      <strong>Cuantificador universal</strong>
+      ∀x: para todo x del dominio.
+    </div>
+    <div>
+      <strong>Cuantificador existencial</strong>
+      ∃x: existe al menos un x del dominio.
+    </div>
+  </div>
+
+  <p>La clave es no escribir símbolos por deporte. Cada símbolo tiene que venir de una parte
+  de la frase: sujeto, propiedad, relación, cantidad o condición.</p>
+
+  <h2>3. El traductor mental</h2>
+  <p>Usá siempre este orden. Es mecánico, sí, pero te salva de mezclar castellano con fórmula:</p>
+
+  <ol class="translation-steps">
+    <li><strong>Detectá el dominio.</strong> ¿De qué objetos habla la frase? Personas, serpientes, círculos, médicos.</li>
+    <li><strong>Nombrá predicados.</strong> Una propiedad usa un argumento; una relación usa dos o más.</li>
+    <li><strong>Elegí cuantificador principal.</strong> "Todos" va con ∀; "algunos", "existe", "hay" van con ∃.</li>
+    <li><strong>Elegí conector central.</strong> Universal normalmente usa →; existencial normalmente usa ∧.</li>
+    <li><strong>Chequeá lectura inversa.</strong> Leé la fórmula en castellano y preguntate si dice lo mismo.</li>
+  </ol>
+
+  <div class="box trap">
+    <span class="box-label">Regla de oro de la cátedra</span>
+    Si <strong>∀</strong> es el cuantificador principal, la representación contiene una
+    <strong>implicación →</strong>. Si <strong>∃</strong> es el cuantificador principal, la
+    representación <strong>no contiene implicación →</strong>; se expresa con conjunción.
+  </div>
+
+  <h2>4. Universal: "todos" arma condición</h2>
+  <p>Ejemplo de la presentación:</p>
+  <blockquote>Todas las personas trazan círculos.</blockquote>
+  <p>Predicados:</p>
+  <table>
+    <tr><th>Símbolo</th><th>Lectura</th></tr>
+    <tr><td>P(x)</td><td>x es persona</td></tr>
+    <tr><td>C(y)</td><td>y es círculo</td></tr>
+    <tr><td>T(x, y)</td><td>x traza y</td></tr>
+  </table>
+  <code class="formula">∀x ∃y (P(x) → (T(x, y) ∧ C(y)))</code>
+  <p>Lectura: para todo x, si x es persona, entonces existe un y tal que x traza y e y es
+  círculo. La implicación aparece porque no estás diciendo que <em>todo objeto</em> sea
+  persona; estás diciendo qué pasa <em>si</em> el objeto es persona.</p>
+
+  <h2>5. Existencial: "algunos" afirma una intersección</h2>
+  <p>Ejemplo de la presentación:</p>
+  <blockquote>Algunas serpientes no son venenosas.</blockquote>
+  <p>Predicados:</p>
+  <table>
+    <tr><th>Símbolo</th><th>Lectura</th></tr>
+    <tr><td>S(x)</td><td>x es serpiente</td></tr>
+    <tr><td>V(x)</td><td>x no es venenoso</td></tr>
+  </table>
+  <code class="formula">∃x (S(x) ∧ V(x))</code>
+  <p>Lectura: existe un x que es serpiente y no es venenoso. No pongas
+  <span class="term">S(x) → V(x)</span> acá: eso diría algo demasiado débil para un
+  existencial.</p>
+
+  <h2>6. Cómo atacar una frase del parcial</h2>
+  <p>Frase estilo guía:</p>
+  <blockquote>Los dinosaurios herbívoros se alimentaban de los helechos que existían en esa época.</blockquote>
+  <p>Una traducción defendible arranca nombrando lo mínimo:</p>
+  <table>
+    <tr><th>Predicado</th><th>Lectura</th></tr>
+    <tr><td>D(x)</td><td>x es dinosaurio</td></tr>
+    <tr><td>H(x)</td><td>x es herbívoro</td></tr>
+    <tr><td>F(y)</td><td>y es helecho de esa época</td></tr>
+    <tr><td>A(x, y)</td><td>x se alimenta de y</td></tr>
+  </table>
+  <code class="formula">∀x ∃y ((D(x) ∧ H(x)) → (F(y) ∧ A(x, y)))</code>
+  <p>¿Por qué ∀? Porque "los dinosaurios herbívoros" funciona como una clase general. ¿Por qué
+  →? Porque la frase dice: si un objeto es dinosaurio herbívoro, entonces se alimenta de algo
+  que cumple la condición.</p>
+
+  <div class="box key">
+    <span class="box-label">Chequeo final</span>
+    Preguntate: ¿la fórmula habla de los mismos objetos? ¿Conserva "todos" o "algunos"?
+    ¿No convertí una propiedad en relación, o una relación en propiedad? Si pasa esos tres
+    filtros, estás cerca.
+  </div>
+
+  <h2>7. Recuperación activa</h2>
+
+  <div class="quiz" data-type="mc">
+    <p class="q">Si la frase principal empieza con "todos", ¿qué conector suele aparecer?</p>
+    <div class="options">
+      <button data-correct>Implicación: →.</button>
+      <button>Conjunción: ∧.</button>
+    </div>
+    <p class="explain">La cátedra remarca que si ∀ es el cuantificador principal, la fórmula
+    contiene implicación.</p>
+  </div>
+
+  <div class="quiz" data-type="mc">
+    <p class="q">"Algunas serpientes no son venenosas" se representa mejor como:</p>
+    <div class="options">
+      <button data-correct>∃x (S(x) ∧ V(x)).</button>
+      <button>∃x (S(x) → V(x)).</button>
+    </div>
+    <p class="explain">Con ∃ se afirma que hay un individuo en la intersección: serpiente y no
+    venenoso. No hace falta implicación.</p>
+  </div>
+
+  <div class="quiz" data-type="flash">
+    <p class="q">De memoria: nombrá las seis piezas básicas de LPO.</p>
+    <button class="reveal">Mostrar respuesta</button>
+    <p class="explain">Operadores lógicos, variables, constantes, predicados o funciones de
+    verdad, cuantificador universal y cuantificador existencial.</p>
+  </div>
+
+  <h2>Fuentes verificadas</h2>
+  <p><strong>Fuente primaria:</strong> <a href="../apuntes/CAMPUS VIRTUAL/01 Presentaciones/04 IA - Representacion_Conocimiento_Logica_FIE2024.pdf">Representación de Conocimiento y Lógica</a>,
+  diapositivas 7-13: piezas de LPO, ejemplos y tips ∀/∃.</p>
+  <p><strong>Fuente práctica:</strong> <a href="../apuntes/CAMPUS VIRTUAL/03 Guías Prácticas de Ejercicios/02 Guía_Práctica_Lógica.pdf">Guía Práctica de Lógica</a>,
+  segunda sección: frases para traducir a Lógica de Primer Orden.</p>
+  <p>Referencia compacta: <a href="../reference/logica-primer-orden.html">chuleta de Lógica de Primer Orden</a>.</p>
+
+  <div class="ask-teacher">
+    <strong>Soy tu docente.</strong> Si querés, pasame una frase de la guía y la traducimos
+    juntos paso a paso, marcando dónde entra cada símbolo.
+  </div>
+
+  <nav class="lesson-nav">
+    <span>← <a href="0005-sistemas-expertos.html">Lección 5 — Sistemas Expertos</a></span>
+    <span><a href="../reference/glossary.html">Glosario general</a> →</span>
+  </nav>
+
+  <script src="../assets/quiz.js"></script>
+</body>
+</html>

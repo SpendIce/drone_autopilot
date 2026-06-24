@@ -1,0 +1,52 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Referencia — Lógica de Primer Orden</title>
+  <link rel="stylesheet" href="../assets/course.css" />
+</head>
+<body>
+  <p class="kicker">Referencia · Curso IA</p>
+  <h1>Lógica de Primer Orden</h1>
+  <p class="meta">Chuleta para traducir frases del parcial a LPO sin mezclar cuantificadores.</p>
+
+  <h2>Piezas</h2>
+  <table>
+    <tr><th>Pieza</th><th>Uso</th><th>Ejemplo</th></tr>
+    <tr><td>Variable</td><td>Objeto indeterminado</td><td>x, y, z</td></tr>
+    <tr><td>Constante</td><td>Objeto determinado</td><td>a, b, c</td></tr>
+    <tr><td>Predicado</td><td>Propiedad o relación</td><td>P(x), T(x, y)</td></tr>
+    <tr><td>Universal</td><td>Para todo</td><td>∀x</td></tr>
+    <tr><td>Existencial</td><td>Existe al menos uno</td><td>∃x</td></tr>
+    <tr><td>Operadores</td><td>Conectan hechos</td><td>¬, ∧, ∨, →, ↔</td></tr>
+  </table>
+
+  <h2>Regla de traducción</h2>
+  <table>
+    <tr><th>Frase</th><th>Patrón</th><th>Lectura</th></tr>
+    <tr><td>Todos los A son B</td><td><code>∀x (A(x) → B(x))</code></td><td>Si x es A, entonces x es B.</td></tr>
+    <tr><td>Algunos A son B</td><td><code>∃x (A(x) ∧ B(x))</code></td><td>Hay un x que es A y B.</td></tr>
+    <tr><td>Ningún A es B</td><td><code>∀x (A(x) → ¬B(x))</code></td><td>Todo A queda fuera de B.</td></tr>
+    <tr><td>Algún A no es B</td><td><code>∃x (A(x) ∧ ¬B(x))</code></td><td>Hay un A que no cumple B.</td></tr>
+  </table>
+
+  <h2>Proceso</h2>
+  <ol>
+    <li>Detectar dominio.</li>
+    <li>Nombrar propiedades y relaciones.</li>
+    <li>Elegir cuantificador principal.</li>
+    <li>Usar → con ∀ y ∧ con ∃, salvo que la frase diga otra estructura explícita.</li>
+    <li>Leer la fórmula en castellano para comprobar equivalencia.</li>
+  </ol>
+
+  <h2>Ejemplos clave</h2>
+  <table>
+    <tr><th>Frase</th><th>Fórmula</th></tr>
+    <tr><td>Todas las personas trazan círculos.</td><td><code>∀x∃y (P(x) → (T(x, y) ∧ C(y)))</code></td></tr>
+    <tr><td>Algunas serpientes no son venenosas.</td><td><code>∃x (S(x) ∧ V(x))</code></td></tr>
+  </table>
+
+  <p style="margin-top:3rem"><a href="../lessons/0006-logica-primer-orden.html">← Volver a la Lección 6</a></p>
+</body>
+</html>
