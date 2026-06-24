@@ -47,7 +47,7 @@
     <tr>
       <td>La población final se analiza para encontrar soluciones óptimas.</td>
       <td><strong>Falso</strong></td>
-      <td>La población final se analiza para identificar el mejor individuo por aptitud; no garantiza óptimo global ni que cualquier individuo sea solución óptima.</td>
+      <td>En teoría se toma el mejor individuo de la población final; en práctica se comparan logs de corridas y puede ganar un individuo que no esté en la población final.</td>
     </tr>
     <tr>
       <td>La función de aptitud depende del operador de selección.</td>
@@ -59,7 +59,8 @@
   <h2>Frase de examen</h2>
   <blockquote>La población final es el conjunto de individuos obtenido al cumplir el criterio
   de paro. En teoría, la solución se identifica como el individuo de mejor aptitud dentro de
-  esa población; en práctica se comparan varias corridas. No garantiza óptimo global.</blockquote>
+  esa población. En práctica no se analiza solo la población final: se comparan logs de varias
+  corridas y se elige el mejor individuo observado, aunque no esté en la población final.</blockquote>
 
   <p style="margin-top:3rem"><a href="../lessons/0004-algoritmos-geneticos.html">Volver a la Lección 4</a></p>
 </body>

@@ -18,10 +18,10 @@ La afirmación 5 ("un gen representa una característica o variable dentro de un
 **VERDADERA**.
 
 La afirmación 6 ("la población final ... se analiza para encontrar soluciones óptimas") es
-**FALSA** si se lee literalmente: la población final es el conjunto que queda cuando se cumple
-el criterio de paro, pero la solución se identifica por el **individuo de mejor aptitud** dentro
-de esa población. No cualquier individuo de la población final es solución óptima, ni el AG
-garantiza el óptimo global.
+**FALSA** si se lee literalmente: en teoría la solución se identifica por el **individuo de
+mejor aptitud** dentro de la población final, pero en la práctica no se analiza solo esa
+población final. Se comparan los logs de varias corridas y puede elegirse el mejor individuo
+observado aunque no pertenezca a la población final.
 
 ## Evidencia visual
 - Diapo 9: equivalencia evolución ↔ AG.
@@ -32,7 +32,8 @@ garantiza el óptimo global.
 - Diapos 67-68: si no hay paro, `Pi = PM`; si hay paro, `PF = PM`.
 - Diapo 69: "Identificación del individuo solución (teoría)" por **mejor aptitud** dentro de
   la población final.
-- Diapo 75: en práctica se usa log de corridas y mejor aptitud.
+- Diapo 75: en práctica se usa log de corridas y mejor aptitud; el individuo elegido puede no
+  estar en la población final de una corrida.
 
 ## Archivos creados
 - `lessons/0004-algoritmos-geneticos.html`

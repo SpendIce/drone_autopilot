@@ -160,27 +160,28 @@
     <span class="box-label">Lectura correcta de la cátedra</span>
     En <strong>teoría</strong>, se identifica como solución el individuo de
     <strong>mejor aptitud dentro de la población final</strong>. En <strong>práctica</strong>,
-    se miran logs de varias corridas y se elige el mejor individuo observado, aunque no
-    necesariamente pertenezca a la última población de una corrida.
+    se miran los <strong>logs de corridas</strong> y se elige el mejor individuo observado
+    entre las poblaciones generadas, aunque <strong>no necesariamente pertenezca a la población
+    final</strong> de una corrida.
   </div>
 
   <div class="box trap">
     <span class="box-label">Afirmación 6 — Falso</span>
     <blockquote>"La población final en un Algoritmo Genético es la población que se analiza
     para encontrar soluciones óptimas al problema que se está resolviendo."</blockquote>
-    <p><strong>Falso.</strong> La población final se analiza para
-    identificar el individuo de mejor aptitud, pero no garantiza que toda la población sean
-    soluciones óptimas ni que el óptimo global esté ahí. El AG puede caer en máximos locales,
-    converger prematuramente o necesitar varias corridas con distintos parámetros.</p>
+    <p><strong>Falso.</strong> No se analiza solamente la población final. En teoría se toma el
+    mejor individuo de esa población; en práctica se compara el mejor individuo observado en los
+    logs de varias corridas, aunque haya aparecido antes y ya no esté en la población final. Además,
+    el AG puede caer en máximos locales, converger prematuramente o necesitar distintos parámetros.</p>
   </div>
 
   <div class="box exam">
     <span class="box-label">Cómo lo escribís en 5 renglones</span>
     Falso. La población final es el conjunto de individuos obtenido cuando se cumple el
     criterio de paro. En teoría, la solución se identifica como el <strong>individuo de mejor
-    aptitud</strong> dentro de esa población, no como cualquier integrante ni como garantía de
-    óptimo global. En la práctica se comparan varias corridas y se elige el mejor individuo
-    observado.
+    aptitud</strong> dentro de esa población. En la práctica no se analiza solo la población
+    final: se comparan los mejores individuos observados en los logs de varias corridas, aunque
+    no estén en la población final.
   </div>
 
   <h2>6. Corrida, vuelta y óptimo</h2>
@@ -234,10 +235,10 @@
   <div class="quiz" data-type="flash">
     <p class="q">De memoria: justificá por qué la afirmación 6 del parcial es falsa.</p>
     <button class="reveal">Mostrar respuesta</button>
-    <p class="explain">Porque la población final no equivale a "soluciones óptimas". Es el
-    conjunto que queda al cumplir el criterio de paro; en teoría se toma el individuo de mejor
-    aptitud dentro de esa población, y en práctica se comparan varias corridas. No hay garantía
-    de óptimo global.</p>
+    <p class="explain">Porque no se analiza solo la población final. En teoría se toma el
+    individuo de mejor aptitud dentro de esa población; en práctica se comparan los mejores
+    individuos observados en los logs de varias corridas, aunque hayan aparecido antes y no estén
+    en la población final. No hay garantía de óptimo global.</p>
   </div>
 
   <h2>Para fijar el "por qué"</h2>
