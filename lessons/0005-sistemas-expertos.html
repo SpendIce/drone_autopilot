@@ -1,0 +1,236 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Lección 5 — Sistemas Expertos</title>
+  <link rel="stylesheet" href="../assets/course.css" />
+  <style>
+    .architecture {
+      display: grid;
+      grid-template-columns: 1fr;
+      gap: 0.55rem;
+      margin: 1.2rem 0;
+      font-family: ui-sans-serif, system-ui, sans-serif;
+      font-size: 0.9rem;
+    }
+    .architecture span {
+      border: 1px solid var(--rule);
+      border-radius: 6px;
+      padding: 0.55rem 0.7rem;
+      background: #fff;
+    }
+    .architecture .core {
+      background: var(--accent-soft);
+      border-color: #e3c9c9;
+      font-weight: 700;
+    }
+    .architecture .support {
+      background: var(--warn-soft);
+      border-color: #e9d8ad;
+    }
+    .choice-grid {
+      display: grid;
+      grid-template-columns: repeat(3, 1fr);
+      gap: 0.7rem;
+      margin: 1.2rem 0;
+      font-family: ui-sans-serif, system-ui, sans-serif;
+      font-size: 0.86rem;
+    }
+    .choice-grid div {
+      border: 1px solid var(--rule);
+      border-radius: 6px;
+      padding: 0.75rem;
+      background: #fff;
+    }
+    .choice-grid strong {
+      display: block;
+      color: var(--accent);
+      margin-bottom: 0.25rem;
+    }
+    @media (max-width: 680px) {
+      .choice-grid { grid-template-columns: 1fr; }
+    }
+  </style>
+</head>
+<body>
+  <p class="kicker">Lección 5 · Curso IA — Parcial Vegega</p>
+  <h1>Sistemas Expertos: reglas, inferencia y explicación</h1>
+  <p class="meta">Esta lección cierra la afirmación 4 del V/F y ordena la arquitectura de un
+  Sistema Experto Tradicional. El objetivo es que puedas justificar dónde se aplican los
+  métodos de búsqueda y por qué un SET no es una RNA ni un AG. ~10 min.</p>
+
+  <div class="box exam">
+    <span class="box-label">Mapeo al parcial</span>
+    Afirmación 4: "Los Métodos de Búsqueda se aplican en un Sistema Experto Tradicional
+    dentro de la Base de Conocimientos." La marca clave de la profe fue:
+    <strong>se aplican en el motor de inferencias</strong>.
+  </div>
+
+  <h2>1. Qué hace experto a un SET</h2>
+  <p>Un <strong>Sistema Experto</strong> intenta emular parte del comportamiento de un experto
+  humano en un dominio. Cuando ese conocimiento está escrito de forma <strong>explícita</strong>
+  como hechos, aserciones y reglas, la cátedra habla de <strong>Sistema Experto Tradicional
+  (SET)</strong>.</p>
+
+  <div class="box key">
+    <span class="box-label">Idea central</span>
+    Un SET no aprende pesos como una RNA ni optimiza poblaciones como un AG. El SET razona
+    recorriendo conocimiento explícito: usa reglas, datos del caso y memoria de trabajo para
+    inferir nueva información y explicar el resultado.
+  </div>
+
+  <h2>2. Los siete componentes que importan</h2>
+  <p>La fuente de componentes lista siete piezas. Aprendelas por función, no como nombres
+  sueltos:</p>
+
+  <div class="architecture" aria-label="Componentes de un Sistema Experto Tradicional">
+    <span><strong>Base de Conocimientos</strong>: unión de aserciones y reglas. Contiene el conocimiento del dominio.</span>
+    <span><strong>Base de Datos</strong>: datos del problema particular que se quiere resolver.</span>
+    <span><strong>Memoria de Trabajo</strong>: base temporal donde queda la información deducida.</span>
+    <span class="core"><strong>Motor de Inferencias</strong>: activa reglas usando la base de datos y la memoria de trabajo.</span>
+    <span class="support"><strong>Trazador de Consultas</strong>: formula preguntas al usuario y registra respuestas.</span>
+    <span class="support"><strong>Trazador de Explicaciones</strong>: responde por qué se concluyó o preguntó algo.</span>
+    <span class="support"><strong>Manejador de Comunicaciones</strong>: interfaz de entrada/salida con el usuario.</span>
+  </div>
+
+  <div class="box trap">
+    <span class="box-label">No memorices como loro</span>
+    La <strong>Base de Conocimientos</strong> almacena reglas; el
+    <strong>Motor de Inferencias</strong> las aplica. Si confundís depósito con motor, tu
+    justificación queda floja. La regla está en la biblioteca; quien la usa para razonar es
+    el motor.
+  </div>
+
+  <h2>3. La trampa: búsqueda en SET</h2>
+  <p>Los métodos de búsqueda tienen sentido en un SET porque hay una estructura explícita que
+  puede recorrerse: reglas, hechos, estados, consultas y conclusiones. Pero el recorrido no lo
+  "hace" la base de conocimiento por sí sola.</p>
+
+  <table>
+    <tr><th>Pieza</th><th>Rol correcto</th></tr>
+    <tr><td><strong>Base de Conocimientos</strong></td><td>Guarda el dominio: aserciones, hechos y reglas.</td></tr>
+    <tr><td><strong>Motor de Inferencias</strong></td><td>Activa reglas, decide qué aplicar y produce nuevas inferencias.</td></tr>
+    <tr><td><strong>Memoria de Trabajo</strong></td><td>Conserva lo deducido durante el caso actual.</td></tr>
+    <tr><td><strong>Trazador de Explicaciones</strong></td><td>Justifica qué reglas motivaron una conclusión o consulta.</td></tr>
+  </table>
+
+  <div class="box exam">
+    <span class="box-label">Afirmación 4 — cómo defenderla</span>
+    <blockquote>"Los Métodos de Búsqueda se aplican en un Sistema Experto Tradicional dentro
+    de la Base de Conocimientos."</blockquote>
+    <p>La intención es <strong>verdadera</strong>: en un SET hay conocimiento explícito que puede
+    recorrerse con métodos de búsqueda. Pero la justificación precisa es que el recorrido lo
+    realiza el <strong>motor de inferencias</strong> sobre la base de conocimientos, no la base
+    como componente activo.</p>
+  </div>
+
+  <div class="box key">
+    <span class="box-label">Respuesta de cinco renglones</span>
+    Verdadero con precisión. En un SET la base de conocimientos almacena hechos, aserciones
+    y reglas del dominio. Los métodos de búsqueda sirven para recorrer/aplicar ese
+    conocimiento, pero quien los ejecuta es el motor de inferencias. La memoria de trabajo
+    guarda las conclusiones intermedias y el trazador de explicaciones justifica el resultado.
+  </div>
+
+  <h2>4. Dos principios de inferencia</h2>
+  <p>La fuente de componentes indica que el motor de inferencias puede trabajar bajo dos
+  principios:</p>
+
+  <table>
+    <tr><th>Principio</th><th>Pregunta guía</th><th>Dato importante</th></tr>
+    <tr>
+      <td><strong>Datos conocidos</strong></td>
+      <td>Con lo que sé, ¿qué puedo concluir?</td>
+      <td>La base de datos no puede estar vacía.</td>
+    </tr>
+    <tr>
+      <td><strong>Hipótesis conocida</strong></td>
+      <td>Para probar esta hipótesis, ¿qué necesito saber?</td>
+      <td>La base de datos puede estar vacía.</td>
+    </tr>
+  </table>
+
+  <p>No necesitás convertir esto en un algoritmo para el parcial. Necesitás reconocer que el
+  motor elige reglas y mueve el razonamiento, mientras los repositorios guardan conocimiento,
+  datos y conclusiones.</p>
+
+  <h2>5. Cuándo conviene SET, RNA o AG</h2>
+  <p>El deck de construcción de sistemas inteligentes lo pone en la etapa de
+  <strong>formalización</strong>: se elige el modelo implementable según objetivos, tarea,
+  conocimiento y datos disponibles.</p>
+
+  <div class="choice-grid">
+    <div>
+      <strong>SET / SBC</strong>
+      Clasificación o predicción con reglas completas y representables. Conocimiento explícito.
+    </div>
+    <div>
+      <strong>RNA</strong>
+      Clasificación o predicción con ejemplos representativos. Conocimiento implícito en pesos.
+    </div>
+    <div>
+      <strong>AG</strong>
+      Optimización combinatoria. Se buscan soluciones buenas en un espacio grande.
+    </div>
+  </div>
+
+  <div class="box trap">
+    <span class="box-label">La mezcla que NO va</span>
+    No digas "todo SI usa base de conocimientos" como si fuera lo mismo. En la visión de la
+    cátedra, el SET tiene base explícita; RNA y AG trabajan con conocimiento implícito. Por
+    eso en SET tiene sentido hablar de reglas recorribles y explicaciones trazables.
+  </div>
+
+  <h2>6. Recuperación activa</h2>
+
+  <div class="quiz" data-type="mc">
+    <p class="q">¿Qué componente activa reglas para obtener nuevas conclusiones?</p>
+    <div class="options">
+      <button data-correct>Motor de inferencias.</button>
+      <button>Base de conocimientos.</button>
+    </div>
+    <p class="explain">La base guarda reglas y aserciones; el motor las activa usando datos y
+    memoria de trabajo.</p>
+  </div>
+
+  <div class="quiz" data-type="mc">
+    <p class="q">Si tengo reglas completas para clasificar, ¿qué modelo conviene?</p>
+    <div class="options">
+      <button data-correct>SBC o SET.</button>
+      <button>RNA o AG.</button>
+    </div>
+    <p class="explain">Reglas completas y conocimiento explícito apuntan a SBC/SET. RNA va con
+    ejemplos representativos; AG va con optimización combinatoria.</p>
+  </div>
+
+  <div class="quiz" data-type="flash">
+    <p class="q">De memoria: justificá la afirmación 4 en cinco renglones.</p>
+    <button class="reveal">Mostrar respuesta</button>
+    <p class="explain">Verdadero con precisión. En un SET hay una base de conocimientos explícita
+    con hechos y reglas que puede recorrerse. Los métodos de búsqueda se aplican para recorrer
+    o activar ese conocimiento, pero los ejecuta el motor de inferencias. La memoria de trabajo
+    guarda lo deducido y el trazador explica la conclusión.</p>
+  </div>
+
+  <h2>Fuentes verificadas</h2>
+  <p><strong>Fuente primaria:</strong> <a href="../apuntes/CAMPUS VIRTUAL/02 Material Complementario/01 Componentes - Sistemas Expertos Tradicionales.pdf">Componentes de Sistemas Expertos Tradicionales</a>,
+  páginas 1-2: componentes, definición de base de conocimientos, motor de inferencias y
+  trazadores.</p>
+  <p><strong>Fuente de construcción:</strong> <a href="../apuntes/CAMPUS VIRTUAL/01 Presentaciones/10 IA-ProcConstrSistInt_FIE2024.pdf">Proceso de Construcción de Sistemas Inteligentes</a>,
+  diapositivas 39-42 y 47: formalización y elección entre SBC/SET, AG y RNA.</p>
+  <p>Referencia compacta: <a href="../reference/sistemas-expertos.html">chuleta de Sistemas Expertos</a>.</p>
+
+  <div class="ask-teacher">
+    <strong>Soy tu docente.</strong> Si querés, te tomo ahora la afirmación 4 como oral de
+    parcial: vos respondés en cinco renglones y te marco dónde ajustar.
+  </div>
+
+  <nav class="lesson-nav">
+    <span>← <a href="0004-algoritmos-geneticos.html">Lección 4 — Algoritmos Genéticos</a></span>
+    <span>Próxima: <strong>Lección 6 — Lógica de Primer Orden</strong> →</span>
+  </nav>
+
+  <script src="../assets/quiz.js"></script>
+</body>
+</html>
