@@ -1,0 +1,262 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Lección 4 — Algoritmos Genéticos</title>
+  <link rel="stylesheet" href="../assets/course.css" />
+  <style>
+    .mini-flow {
+      display: grid;
+      gap: 0.45rem;
+      margin: 1.2rem 0;
+      font-family: ui-sans-serif, system-ui, sans-serif;
+      font-size: 0.9rem;
+    }
+    .mini-flow span {
+      border: 1px solid var(--rule);
+      border-radius: 6px;
+      padding: 0.55rem 0.7rem;
+      background: #fff;
+      text-align: center;
+    }
+    .mini-flow .decision {
+      background: var(--warn-soft);
+      border-color: #e9d8ad;
+      font-weight: 700;
+    }
+    .chromosome {
+      display: flex;
+      align-items: stretch;
+      gap: 0;
+      margin: 1rem 0;
+      font-family: ui-sans-serif, system-ui, sans-serif;
+      font-size: 0.82rem;
+    }
+    .gene {
+      min-width: 4.8rem;
+      padding: 0.55rem 0.5rem;
+      border: 1px solid #879d97;
+      background: #dff0eb;
+      text-align: center;
+    }
+    .gene + .gene { border-left: 0; }
+    @media (max-width: 560px) {
+      .chromosome { flex-direction: column; }
+      .gene + .gene { border-left: 1px solid #879d97; border-top: 0; }
+    }
+  </style>
+</head>
+<body>
+  <p class="kicker">Lección 4 · Curso IA — Parcial Vegega</p>
+  <h1>Algoritmos Genéticos: de cromosomas a solución</h1>
+  <p class="meta">La lección de hoy cubre las afirmaciones 5 y 6 del V/F. El objetivo no es
+  programar un AG: es poder justificar con precisión qué representan gen, cromosoma,
+  aptitud, población final y corrida. ~10 min.</p>
+
+  <div class="box exam">
+    <span class="box-label">Mapeo al parcial</span>
+    <strong>Afirmación 5</strong>: "un gen representa una característica o variable dentro de
+    un cromosoma". <strong>Afirmación 6</strong>: "la población final se analiza para encontrar
+    soluciones óptimas". Una es directa; la otra es la trampa.
+  </div>
+
+  <h2>1. Qué problema resuelve un AG</h2>
+  <p>La cátedra define los Algoritmos Genéticos como algoritmos matemáticos de
+  <strong>optimización de propósito general</strong>, inspirados en mecanismos naturales de
+  <strong>selección</strong> y <strong>genética</strong>. Se usan cuando el problema es complejo,
+  tiene muchos parámetros y no conviene recorrer todo el espacio de soluciones a mano.</p>
+
+  <div class="box key">
+    <span class="box-label">Idea central</span>
+    Un AG no "razona" con reglas como un SET ni aprende pesos como una RNA. Genera muchas
+    <strong>posibles soluciones</strong>, las evalúa con una <strong>función de aptitud</strong>,
+    mezcla las mejores y mete pequeñas variaciones. Repite hasta cumplir un criterio de paro.
+  </div>
+
+  <h2>2. La traducción evolución → algoritmo</h2>
+  <p>La diapositiva clave del deck 05 arma esta equivalencia. Esto hay que saberlo de memoria:</p>
+
+  <table>
+    <tr><th>Teoría de evolución</th><th>Algoritmo Genético</th></tr>
+    <tr><td>Ecosistema / ambiente</td><td><strong>Problema</strong></td></tr>
+    <tr><td>Individuo</td><td><strong>Posible solución</strong></td></tr>
+    <tr><td>Genotipo / cromosoma</td><td><strong>Descripción de la solución</strong></td></tr>
+    <tr><td>Gen</td><td><strong>Característica o atributo</strong></td></tr>
+    <tr><td>Fenotipo</td><td><strong>Función de aptitud</strong></td></tr>
+  </table>
+
+  <div class="chromosome" aria-label="Cromosoma con genes">
+    <div class="gene">Gen 1<br><small>característica</small></div>
+    <div class="gene">Gen 2<br><small>atributo</small></div>
+    <div class="gene">Gen 3<br><small>variable</small></div>
+    <div class="gene">...</div>
+    <div class="gene">Gen N<br><small>atributo</small></div>
+  </div>
+
+  <p>En el ejemplo del acertijo de Einstein, el cromosoma describe una solución completa:
+  casas, nacionalidades, bebidas, cigarrillos y mascotas. Cada gen codifica una parte de esa
+  solución. Entonces la afirmación 5 es fuerte porque está calcada de la tabla de la cátedra.</p>
+
+  <div class="box exam">
+    <span class="box-label">Afirmación 5 — Verdadero</span>
+    <blockquote>"En un problema resuelto mediante Algoritmos Genéticos, un gen representa una
+    característica o variable dentro de un cromosoma."</blockquote>
+    <p><strong>Verdadero.</strong> El cromosoma es la descripción de una posible solución; cada
+    gen representa una característica, atributo o variable de esa solución. Si el cromosoma fuera
+    una ficha técnica, los genes serían sus campos.</p>
+  </div>
+
+  <h2>3. La función de aptitud no sale del operador</h2>
+  <p>La <strong>función de aptitud</strong> evalúa qué tan buena es una solución. En el deck se
+  define como una función que toma un cromosoma y devuelve un número real:
+  <strong>f(x): cromosoma → R</strong>.</p>
+  <p>Para construirla, la cátedra indica analizar:</p>
+  <ul>
+    <li>Condiciones que debe cumplir la solución → <strong>aumentan</strong> la aptitud.</li>
+    <li>Restricciones que no debe cumplir → <strong>disminuyen</strong> la aptitud.</li>
+    <li>Combinaciones inválidas en los genes → <strong>penalizan</strong> la aptitud.</li>
+  </ul>
+
+  <div class="box trap">
+    <span class="box-label">Trampa conceptual</span>
+    La aptitud depende del <strong>problema</strong>, de la <strong>descripción de la
+    solución</strong> y de las restricciones válidas/inválidas. No depende de si después
+    seleccionás por torneo, ranking o ruleta. Es como corregir un parcial: primero definís la
+    rúbrica; después decidís qué alumnos pasan a la instancia siguiente.
+  </div>
+
+  <h2>4. El ciclo de un AG</h2>
+  <p>El flujo oficial del deck 05, atribuido a Holland, es este:</p>
+
+  <div class="mini-flow" aria-label="Flujo de un algoritmo genetico">
+    <span>Generar población inicial</span>
+    <span>Selección</span>
+    <span>Cruzamiento</span>
+    <span>Mutación</span>
+    <span class="decision">¿Paro?</span>
+    <span>Población final</span>
+  </div>
+
+  <table>
+    <tr><th>Etapa</th><th>Qué hace</th></tr>
+    <tr><td><strong>Población inicial</strong></td><td>Se genera al azar o ad-hoc. Se define cantidad de individuos y varianza constante/variable.</td></tr>
+    <tr><td><strong>Selección</strong></td><td>Elige individuos según aptitud. Métodos: torneo, ranking, ruleta, control sobre número esperado.</td></tr>
+    <tr><td><strong>Cruzamiento</strong></td><td>Combina material de padres seleccionados. Métodos: simple, multipunto, binomial por máscara o azar.</td></tr>
+    <tr><td><strong>Mutación</strong></td><td>Puede alterar genes para introducir variabilidad. Si el random supera la probabilidad, no muta; si es menor o igual, muta.</td></tr>
+    <tr><td><strong>Criterio de paro</strong></td><td>Puede ser cantidad de vueltas, tiempo, aptitud mayor a cierto valor, promedio de aptitud cercano a un valor, etc.</td></tr>
+  </table>
+
+  <p>Detalle fino: si <strong>no</strong> se cumple el paro, la población mutada vuelve como
+  nueva población inicial de la siguiente vuelta. Si <strong>sí</strong> se cumple, la población
+  final es la población mutada de esa última vuelta.</p>
+
+  <h2>5. Población final ≠ solución automáticamente</h2>
+  <p>Esta es la trampa más probable. La población final es un <strong>conjunto de individuos</strong>
+  que queda al cumplirse el criterio de paro. Pero la solución no es "cualquier individuo" de
+  esa población.</p>
+
+  <div class="box key">
+    <span class="box-label">Lectura correcta de la cátedra</span>
+    En <strong>teoría</strong>, se identifica como solución el individuo de
+    <strong>mejor aptitud dentro de la población final</strong>. En <strong>práctica</strong>,
+    se miran logs de varias corridas y se elige el mejor individuo observado, aunque no
+    necesariamente pertenezca a la última población de una corrida.
+  </div>
+
+  <div class="box trap">
+    <span class="box-label">Afirmación 6 — Falso</span>
+    <blockquote>"La población final en un Algoritmo Genético es la población que se analiza
+    para encontrar soluciones óptimas al problema que se está resolviendo."</blockquote>
+    <p><strong>Falso.</strong> La población final se analiza para
+    identificar el individuo de mejor aptitud, pero no garantiza que toda la población sean
+    soluciones óptimas ni que el óptimo global esté ahí. El AG puede caer en máximos locales,
+    converger prematuramente o necesitar varias corridas con distintos parámetros.</p>
+  </div>
+
+  <div class="box exam">
+    <span class="box-label">Cómo lo escribís en 5 renglones</span>
+    Falso. La población final es el conjunto de individuos obtenido cuando se cumple el
+    criterio de paro. En teoría, la solución se identifica como el <strong>individuo de mejor
+    aptitud</strong> dentro de esa población, no como cualquier integrante ni como garantía de
+    óptimo global. En la práctica se comparan varias corridas y se elige el mejor individuo
+    observado.
+  </div>
+
+  <h2>6. Corrida, vuelta y óptimo</h2>
+  <p>Una <strong>corrida</strong> es una ejecución completa del AG: desde generar la población
+  inicial hasta parar. Dentro de una corrida hay muchas <strong>vueltas</strong> o generaciones.
+  La cátedra muestra varios comportamientos de corrida con los mismos parámetros y luego con
+  parámetros ajustados: no todas convergen igual.</p>
+
+  <div class="box key">
+    <span class="box-label">Por qué importa</span>
+    Un AG explora un paisaje de aptitud con máximos locales y un máximo óptimo. Selección y
+    cruzamiento empujan hacia individuos mejores; mutación ayuda a no perder diversidad. Si la
+    selección se vuelve demasiado fuerte o la mutación es pobre, puede aparecer
+    <strong>convergencia prematura</strong>: quedás en un máximo local y te creés que llegaste.
+    Ponete las pilas con esta distinción porque es justo lo que separa "mejor encontrado" de
+    "óptimo garantizado".
+  </div>
+
+  <h2>7. Recuperación activa</h2>
+
+  <div class="quiz" data-type="mc">
+    <p class="q">En la tabla evolución → AG, ¿qué representa un gen?</p>
+    <div class="options">
+      <button data-correct>Característica o atributo de una solución.</button>
+      <button>Conjunto completo de soluciones candidatas.</button>
+    </div>
+    <p class="explain">Gen = característica/atributo. Cromosoma = descripción completa de una
+    posible solución. Población = conjunto de individuos.</p>
+  </div>
+
+  <div class="quiz" data-type="mc">
+    <p class="q">¿De qué depende la función de aptitud?</p>
+    <div class="options">
+      <button data-correct>Del problema y cromosoma definido.</button>
+      <button>Del operador de selección usado.</button>
+    </div>
+    <p class="explain">La aptitud se diseña antes de seleccionar. Torneo, ranking y ruleta usan
+    esa aptitud; no la definen.</p>
+  </div>
+
+  <div class="quiz" data-type="mc">
+    <p class="q">Si el criterio de paro se cumple, ¿qué pasa?</p>
+    <div class="options">
+      <button data-correct>La población mutada pasa a ser población final.</button>
+      <button>La población inicial pasa a ser solución final.</button>
+    </div>
+    <p class="explain">El flujo muestra PF = PM al cumplirse el paro. Si no se cumple, PM vuelve
+    como nueva población inicial para otra vuelta.</p>
+  </div>
+
+  <div class="quiz" data-type="flash">
+    <p class="q">De memoria: justificá por qué la afirmación 6 del parcial es falsa.</p>
+    <button class="reveal">Mostrar respuesta</button>
+    <p class="explain">Porque la población final no equivale a "soluciones óptimas". Es el
+    conjunto que queda al cumplir el criterio de paro; en teoría se toma el individuo de mejor
+    aptitud dentro de esa población, y en práctica se comparan varias corridas. No hay garantía
+    de óptimo global.</p>
+  </div>
+
+  <h2>Para fijar el "por qué"</h2>
+  <p><strong>Fuente primaria:</strong> <a href="../apuntes/CAMPUS VIRTUAL/01 Presentaciones/05 IA - AlgoritmosGeneticos_FIE2024.pdf">Deck 05 — Algoritmos Genéticos</a>
+  (diapos 9-11, 24, 27-29, 47-48, 53-68 y 69-76). Es la fuente que manda para el parcial.</p>
+  <p><strong>Para profundizar:</strong> <a href="../apuntes/CAMPUS VIRTUAL/04 Bibliografía IA - Drive Profe/Bibliografía IA - FIE 2024/Algoritmos_Geneticos_SI.pdf">Sistemas Inteligentes — capítulo de Algoritmos Genéticos</a>,
+  sección 3.1, especialmente algoritmo simple, selección, cruza y mutación.</p>
+  <p>Referencia compacta: <a href="../reference/algoritmos-geneticos.html">chuleta de Algoritmos Genéticos</a>.</p>
+
+  <div class="ask-teacher">
+    💬 <strong>Soy tu docente.</strong> Si querés, te tomo ahora las afirmaciones 5 y 6 como
+    oral de parcial: vos respondés V/F en cinco renglones y te marco dónde ajustar.
+  </div>
+
+  <nav class="lesson-nav">
+    <span>← <a href="0003-redes-neuronales.html">Lección 3 — Redes Neuronales</a></span>
+    <span>Próxima: <strong>Lección 5 — Sistemas Expertos</strong> →</span>
+  </nav>
+
+  <script src="../assets/quiz.js"></script>
+</body>
+</html>

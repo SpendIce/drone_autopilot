@@ -1,0 +1,66 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Referencia — Algoritmos Genéticos</title>
+  <link rel="stylesheet" href="../assets/course.css" />
+</head>
+<body>
+  <p class="kicker">Referencia · Curso IA</p>
+  <h1>Algoritmos Genéticos: chuleta de parcial</h1>
+  <p class="meta">Terminología de la cátedra Vegega, verificada contra el deck 05 renderizado
+  como imagen. Usala para repasar rápido antes del V/F.</p>
+
+  <h2>Equivalencias</h2>
+  <table>
+    <tr><th>Evolución</th><th>AG</th><th>Cómo lo decís</th></tr>
+    <tr><td>Ecosistema / ambiente</td><td>Problema</td><td>El espacio donde se busca.</td></tr>
+    <tr><td>Individuo</td><td>Posible solución</td><td>Una respuesta candidata.</td></tr>
+    <tr><td>Genotipo / cromosoma</td><td>Descripción de la solución</td><td>Codificación completa.</td></tr>
+    <tr><td>Gen</td><td>Característica o atributo</td><td>Una variable dentro del cromosoma.</td></tr>
+    <tr><td>Fenotipo</td><td>Función de aptitud</td><td>Evaluación numérica de la solución.</td></tr>
+  </table>
+
+  <h2>Flujo</h2>
+  <p><strong>Generar población inicial → Selección → Cruzamiento → Mutación → ¿Paro? → Población final.</strong></p>
+  <p>Si no hay paro: la población mutada vuelve como nueva población inicial. Si hay paro:
+  <strong>PF = PM</strong>.</p>
+
+  <h2>Operadores</h2>
+  <table>
+    <tr><th>Operador</th><th>Clave</th></tr>
+    <tr><td>Selección</td><td>Torneo, ranking, ruleta, control sobre número esperado.</td></tr>
+    <tr><td>Cruzamiento</td><td>Simple, multipunto, binomial por máscara o azar.</td></tr>
+    <tr><td>Mutación</td><td>Introduce variabilidad; random &gt; probabilidad ⇒ no muta, random ≤ probabilidad ⇒ muta.</td></tr>
+    <tr><td>Criterio de paro</td><td>Cantidad de vueltas, tiempo, f(Ix) &gt; valor, promedio de aptitud ≈ valor, etc.</td></tr>
+  </table>
+
+  <h2>Trampas V/F</h2>
+  <table>
+    <tr><th>Afirmación</th><th>Veredicto</th><th>Por qué</th></tr>
+    <tr>
+      <td>Un gen representa una característica o variable dentro de un cromosoma.</td>
+      <td><strong>Verdadero</strong></td>
+      <td>Gen = característica/atributo; cromosoma = descripción de la solución.</td>
+    </tr>
+    <tr>
+      <td>La población final se analiza para encontrar soluciones óptimas.</td>
+      <td><strong>Falso</strong></td>
+      <td>La población final se analiza para identificar el mejor individuo por aptitud; no garantiza óptimo global ni que cualquier individuo sea solución óptima.</td>
+    </tr>
+    <tr>
+      <td>La función de aptitud depende del operador de selección.</td>
+      <td><strong>Falso</strong></td>
+      <td>La aptitud depende del problema, del cromosoma y de restricciones; selección solo la usa.</td>
+    </tr>
+  </table>
+
+  <h2>Frase de examen</h2>
+  <blockquote>La población final es el conjunto de individuos obtenido al cumplir el criterio
+  de paro. En teoría, la solución se identifica como el individuo de mejor aptitud dentro de
+  esa población; en práctica se comparan varias corridas. No garantiza óptimo global.</blockquote>
+
+  <p style="margin-top:3rem"><a href="../lessons/0004-algoritmos-geneticos.html">Volver a la Lección 4</a></p>
+</body>
+</html>
