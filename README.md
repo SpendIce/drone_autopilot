@@ -421,6 +421,25 @@ dataset) en vez de descartar el episodio completo, ya que la primera mitad de es
 intentos (el acercamiento y el giro temprano, antes de trabarse) es señal util que no
 esta en la primera campaña.
 
+### 6. Reentrenamiento v2 (seed + experto v1 + experto v2) y resultado de la red sola
+
+Reentrenado en Kaggle T4x2 con las tres fuentes combinadas (`merge-manifests` con seed +
+`expert_avoidance_seed` + `expert_avoidance_seed_v2`,
+`rgbd_mobilenet_v3_small_224_e20_ddp_avoidance_v2_best.pt`). Con `blend=0.0` (red pura, sin
+ninguna ayuda del planificador ni del fix de `avoidance_urgency` — el blend ya es 0 asi que
+no hay nada que destemplar):
+
+| Ruta | emergency_stops | min_depth_m | resultado |
+|---|---|---|---|
+| Pared original (135 pasos) | 0/135 | 2.41 | avanza, 6.17m restantes |
+| Ruta obstruida (200 pasos) | 0/200 | 2.01 | avanza, 18.15m restantes (sin objetivo que perseguir) |
+
+La red **sola** —sin el fix de `MissionPlanner`, sin el detector de atascamiento, sin nada
+del lado del `SafetyFilter` mas alla del freno de emergencia basico— ya esquiva ambas rutas
+sin un solo emergency stop. Confirma que las demostraciones de las dos campañas (giro
+temprano, retroceso de ultimo recurso) se transfirieron al comportamiento aprendido, no
+solo al comportamiento del experto que las genero.
+
 **Velocidad: escalado seguro validado.** En la pared original, subir `mission-cruise-speed`
 y `max-vx` junto con `emergency-depth` en la misma proporcion (para no perder margen de
 frenado) funciona limpio hasta 3x la velocidad original:
