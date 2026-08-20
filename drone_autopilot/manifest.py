@@ -150,6 +150,26 @@ def write_manifest(records: Sequence[DatasetManifestRecord], path: Path | str) -
         raise ValueError("Manifest path must end with .parquet or .csv")
 
 
+def merge_manifests(paths: Sequence[Path | str]) -> list[DatasetManifestRecord]:
+    """Concatenate manifests built with distinct `--path-root` values so a single
+    `--data-root` covers every source at train time (see build_airsim_seed_manifest's
+    `path_root` argument)."""
+
+    if not paths:
+        raise ValueError("merge_manifests requires at least one manifest path")
+
+    merged: list[DatasetManifestRecord] = []
+    seen: set[tuple[str, str, str]] = set()
+    for path in paths:
+        for record in read_manifest(path):
+            key = (record.source, record.episode_id, record.frame_id)
+            if key in seen:
+                raise ValueError(f"duplicate record across manifests: {key}")
+            seen.add(key)
+            merged.append(record)
+    return merged
+
+
 def read_manifest(path: Path | str) -> list[DatasetManifestRecord]:
     import pandas as pd
 

@@ -11,6 +11,7 @@ from typing import Any
 from .manifest import (
     build_airsim_seed_manifest,
     ensure_episode_split_integrity,
+    merge_manifests,
     read_manifest,
     summarize_manifest,
     validate_alignment,
@@ -42,6 +43,23 @@ def cmd_build_airsim_manifest(args: argparse.Namespace) -> int:
         train_ratio=args.train_ratio,
         val_ratio=args.val_ratio,
     )
+    write_manifest(records, output)
+    summary = summarize_manifest(records)
+    _print_json(
+        {
+            "output": str(output),
+            "rows": summary.rows,
+            "sources": summary.sources,
+            "splits": summary.splits,
+            "labeled_actions": summary.labeled_actions,
+        }
+    )
+    return 0
+
+
+def cmd_merge_manifests(args: argparse.Namespace) -> int:
+    records = merge_manifests(args.manifests)
+    output = Path(args.output)
     write_manifest(records, output)
     summary = summarize_manifest(records)
     _print_json(
@@ -198,6 +216,100 @@ def cmd_airsim_loop(args: argparse.Namespace) -> int:
     return 0
 
 
+def cmd_record_expert(args: argparse.Namespace) -> int:
+    from .expert_policy import ReactiveAvoidanceConfig, ReactiveAvoidancePolicy
+    from .mission import MissionConfig, MissionPlanner
+    from .record import record_episode
+    from .safety import SafetyConfig, SafetyFilter
+    from .simulators.airsim_adapter import AirSimAdapter
+
+    policy = ReactiveAvoidancePolicy(
+        ReactiveAvoidanceConfig(
+            cruise_vx_mps=args.cruise_vx,
+            caution_depth_m=args.caution_depth,
+            min_forward_depth_m=args.min_forward_depth,
+            max_lateral_vy_mps=args.max_lateral_vy,
+            max_avoid_yaw_radps=args.max_avoid_yaw_rate,
+        )
+    )
+    safety_filter = SafetyFilter(
+        SafetyConfig(
+            max_vx_mps=args.max_vx,
+            max_vy_mps=args.max_vy,
+            max_vz_mps=args.max_vz,
+            max_yaw_rate_radps=args.max_yaw_rate,
+            smoothing_alpha=args.smoothing_alpha,
+            emergency_depth_m=args.emergency_depth,
+            depth_roi_top=args.depth_roi_top,
+            depth_roi_bottom=args.depth_roi_bottom,
+            depth_roi_left=args.depth_roi_left,
+            depth_roi_right=args.depth_roi_right,
+        )
+    )
+    adapter = AirSimAdapter(
+        vehicle_name=args.vehicle_name,
+        scene_camera=args.scene_camera,
+        depth_camera=args.depth_camera,
+        invert_z=args.invert_z,
+        hold_altitude=args.hold_altitude,
+        wait_for_commands=not args.async_commands,
+        depth_capture_interval=args.depth_interval,
+        release_control_on_close=not args.keep_api_control,
+    )
+    adapter.connect(
+        arm=args.arm,
+        takeoff=args.takeoff,
+        takeoff_altitude_m=args.takeoff_altitude,
+        takeoff_velocity_mps=args.takeoff_velocity,
+    )
+    if any(
+        value is not None
+        for value in (args.start_x, args.start_y, args.start_z, args.start_yaw_deg)
+    ):
+        adapter.set_pose(
+            x=args.start_x,
+            y=args.start_y,
+            z=args.start_z,
+            yaw_rad=math.radians(args.start_yaw_deg)
+            if args.start_yaw_deg is not None
+            else None,
+        )
+    mission_planner = None
+    waypoints = args.waypoint or []
+    if waypoints:
+        mission_planner = MissionPlanner(
+            waypoints,
+            MissionConfig(
+                cruise_speed_mps=args.mission_cruise_speed,
+                waypoint_radius_m=args.mission_waypoint_radius,
+                slow_radius_m=args.mission_slow_radius,
+                position_blend=args.mission_position_blend,
+                yaw_blend=args.mission_yaw_blend,
+                heading_gain=args.mission_heading_gain,
+                max_goal_yaw_rate_radps=args.mission_max_yaw_rate,
+            ),
+        )
+    result = record_episode(
+        adapter,
+        policy,
+        safety_filter,
+        steps=args.steps,
+        command_duration_s=args.command_duration,
+        output_dir=Path(args.output_dir),
+        mission_planner=mission_planner,
+    )
+    _print_json(
+        {
+            "frames_written": result.frames_written,
+            "next_frame_id": result.next_frame_id,
+            "emergency_stops": result.emergency_stops,
+            "mission_complete": result.mission_complete,
+            "output_dir": args.output_dir,
+        }
+    )
+    return 0
+
+
 def cmd_airsim_snapshot(args: argparse.Namespace) -> int:
     from .debug import save_observation_snapshot
     from .simulators.airsim_adapter import AirSimAdapter
@@ -237,6 +349,11 @@ def build_parser() -> argparse.ArgumentParser:
     build.add_argument("--train-ratio", type=float, default=0.8)
     build.add_argument("--val-ratio", type=float, default=0.1)
     build.set_defaults(func=cmd_build_airsim_manifest)
+
+    merge = subparsers.add_parser("merge-manifests")
+    merge.add_argument("manifests", nargs="+")
+    merge.add_argument("--output", required=True)
+    merge.set_defaults(func=cmd_merge_manifests)
 
     stats = subparsers.add_parser("stats")
     stats.add_argument("manifest")
@@ -329,6 +446,52 @@ def build_parser() -> argparse.ArgumentParser:
     snapshot.add_argument("--takeoff-altitude", type=float)
     snapshot.add_argument("--takeoff-velocity", type=float, default=1.0)
     snapshot.set_defaults(func=cmd_airsim_snapshot)
+
+    record = subparsers.add_parser("record-expert")
+    record.add_argument("--output-dir", required=True)
+    record.add_argument("--steps", type=int, default=200)
+    record.add_argument("--command-duration", type=float, default=0.1)
+    record.add_argument("--vehicle-name", default="")
+    record.add_argument("--scene-camera", default="0")
+    record.add_argument("--depth-camera", default="0")
+    record.add_argument("--device", default="auto")
+    record.add_argument("--cruise-vx", type=float, default=0.6)
+    record.add_argument("--caution-depth", type=float, default=3.0)
+    record.add_argument("--min-forward-depth", type=float, default=1.2)
+    record.add_argument("--max-lateral-vy", type=float, default=0.6)
+    record.add_argument("--max-avoid-yaw-rate", type=float, default=0.5)
+    record.add_argument("--max-vx", type=float, default=2.0)
+    record.add_argument("--max-vy", type=float, default=1.0)
+    record.add_argument("--max-vz", type=float, default=1.0)
+    record.add_argument("--max-yaw-rate", type=float, default=0.8)
+    record.add_argument("--smoothing-alpha", type=float, default=0.2)
+    record.add_argument("--emergency-depth", type=float, default=0.8)
+    record.add_argument("--depth-roi-top", type=float, default=0.0)
+    record.add_argument("--depth-roi-bottom", type=float, default=1.0)
+    record.add_argument("--depth-roi-left", type=float, default=0.0)
+    record.add_argument("--depth-roi-right", type=float, default=1.0)
+    record.add_argument("--invert-z", action="store_true")
+    record.add_argument("--hold-altitude", action="store_true")
+    record.add_argument("--async-commands", action="store_true")
+    record.add_argument("--keep-api-control", action="store_true")
+    record.add_argument("--depth-interval", type=int, default=1)
+    record.add_argument("--arm", action="store_true")
+    record.add_argument("--takeoff", action="store_true")
+    record.add_argument("--takeoff-altitude", type=float)
+    record.add_argument("--takeoff-velocity", type=float, default=1.0)
+    record.add_argument("--start-x", type=float)
+    record.add_argument("--start-y", type=float)
+    record.add_argument("--start-z", type=float)
+    record.add_argument("--start-yaw-deg", type=float)
+    record.add_argument("--waypoint", action="append", type=_parse_waypoint_arg)
+    record.add_argument("--mission-cruise-speed", type=float, default=0.6)
+    record.add_argument("--mission-waypoint-radius", type=float, default=1.5)
+    record.add_argument("--mission-slow-radius", type=float, default=4.0)
+    record.add_argument("--mission-position-blend", type=float, default=0.6)
+    record.add_argument("--mission-yaw-blend", type=float, default=0.6)
+    record.add_argument("--mission-heading-gain", type=float, default=0.8)
+    record.add_argument("--mission-max-yaw-rate", type=float, default=0.25)
+    record.set_defaults(func=cmd_record_expert)
 
     return parser
 
