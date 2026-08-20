@@ -26,6 +26,18 @@ class SafetyConfig:
     depth_roi_bottom: float = 1.0
     depth_roi_left: float = 0.0
     depth_roi_right: float = 1.0
+    stuck_streak_threshold: int = 15
+    stuck_depth_improvement_m: float = 0.05
+    stuck_escape_steps: int = 20
+    stuck_escape_vx_mps: float = -0.6
+
+    def __post_init__(self) -> None:
+        if self.stuck_streak_threshold <= 0:
+            raise ValueError("stuck_streak_threshold must be positive")
+        if self.stuck_escape_steps <= 0:
+            raise ValueError("stuck_escape_steps must be positive")
+        if self.stuck_escape_vx_mps > 0.0:
+            raise ValueError("stuck_escape_vx_mps must be <= 0 (it is a reverse speed)")
 
 
 @dataclass(frozen=True)
@@ -43,9 +55,17 @@ class SafetyFilter:
         self.config = config or SafetyConfig()
         self._validate_depth_roi()
         self._previous = VelocityCommand.hover()
+        self._reset_stuck_tracking()
 
     def reset(self) -> None:
         self._previous = VelocityCommand.hover()
+        self._reset_stuck_tracking()
+
+    def _reset_stuck_tracking(self) -> None:
+        self._stuck_streak = 0
+        self._stuck_best_depth: float | None = None
+        self._stuck_escape_remaining = 0
+        self._stuck_direction_sign = 1.0
 
     def filter(
         self,
@@ -67,15 +87,27 @@ class SafetyFilter:
         if min_depth is not None and min_depth < self.config.emergency_depth_m:
             reactive_command = self._coerce_command(reactive) if reactive is not None else None
             steering_source = reactive_command if reactive_command is not None and reactive_command.is_finite() else command
-            escape = self._escape_command(command, steering_source)
+
+            if self._stuck_escape_remaining <= 0:
+                self._update_stuck_tracking(min_depth, steering_source)
+
+            if self._stuck_escape_remaining > 0:
+                escape = self._stuck_escape_command()
+                self._stuck_escape_remaining -= 1
+                reason = "stuck_escape"
+            else:
+                escape = self._escape_command(command, steering_source)
+                reason = "close_obstacle"
+
             self._previous = escape
             return SafetyFilterResult(
                 command=escape,
                 emergency_stop=True,
-                reason="close_obstacle",
+                reason=reason,
                 min_depth_m=min_depth,
             )
 
+        self._reset_stuck_tracking()
         clamped = command.clamp(
             max_vx=self.config.max_vx_mps,
             max_vy=self.config.max_vy_mps,
@@ -138,6 +170,47 @@ class SafetyFilter:
         )
         target = self._apply_deadbands(escape)
         return target.smooth_toward(self._previous, self.config.smoothing_alpha)
+
+    def _update_stuck_tracking(self, min_depth: float, steering_source: VelocityCommand) -> None:
+        """Escalate to a committed escape maneuver if the per-step reactive
+        response isn't actually gaining clearance.
+
+        `_escape_command` reacts proportionally every step — enough for most
+        obstacles, but a closed-loop run against a concave corner showed depth
+        can sit exactly frozen for hundreds of steps while that per-step
+        signal stays at full authority: something (contact resolution against
+        the collision mesh) is absorbing it, and reacting the same way every
+        step never escalates. This is the classic bug-algorithm fix: once
+        stuck long enough, stop re-deciding each step and commit to a fixed,
+        sustained maneuver in one direction for a while instead.
+        """
+        cfg = self.config
+        if self._stuck_best_depth is None or min_depth > self._stuck_best_depth + cfg.stuck_depth_improvement_m:
+            self._stuck_best_depth = min_depth
+            self._stuck_streak = 0
+            return
+
+        self._stuck_streak += 1
+        if self._stuck_streak >= cfg.stuck_streak_threshold:
+            self._stuck_direction_sign = 1.0 if steering_source.yaw_rate >= 0.0 else -1.0
+            self._stuck_escape_remaining = cfg.stuck_escape_steps
+            self._stuck_streak = 0
+            self._stuck_best_depth = None
+
+    def _stuck_escape_command(self) -> VelocityCommand:
+        """Fixed, sustained maneuver for the committed-escape window: full
+        reverse plus full lateral/yaw authority in whichever direction was
+        indicated when the commit triggered. Deliberately not smoothed
+        toward `_previous` — the point is to break out of a state the
+        smoothed, proportional response got stuck in, not ease into it."""
+        cfg = self.config
+        sign = self._stuck_direction_sign
+        return VelocityCommand(
+            vx=cfg.stuck_escape_vx_mps,
+            vy=sign * cfg.max_vy_mps,
+            vz=0.0,
+            yaw_rate=sign * cfg.max_yaw_rate_radps,
+        )
 
     def _coerce_command(
         self,
