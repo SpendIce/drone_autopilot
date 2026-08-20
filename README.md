@@ -401,6 +401,12 @@ funciona con el checkpoint ya entrenado — no depende de reentrenar. Tests:
 `test_mission_planner_avoidance_urgency_tapers_goal_contribution`,
 `test_urgency_for_depth_ramps_linearly_between_bands`.
 
+Validado en 3 rutas mas antes de tratarlo como probado (una corrida limpia sola podia ser
+suerte): la pared original (chequeo de regresion, `0/135`), la misma zona del obstaculo con
+offset lateral por si era mas ancho de lo pensado (`0/200`), y un acercamiento norte-sur al
+mismo punto desde un angulo nunca probado (`0/200`, `mission_complete=True`). Las tres
+corridas, cero emergency stops.
+
 **Segunda campaña de grabacion.** `scripts/record_expert_campaign_v2.py`: misma grilla de
 posiciones/rumbos que la primera (16 episodios, sin la diagonal para acotar tiempo) mas 3
 repeticiones de la ruta obstruida, con `depth-interval=2` (en vez de 5) y los defaults
