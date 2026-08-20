@@ -375,11 +375,31 @@ Probado en vivo sobre la misma esquina: el mecanismo se activa y alterna correct
 entre respuesta proporcional y commit fijo (se ve en la telemetria: `vx=-0.6, vy=-0.6,
 yaw=-34.4°/s` exactos en los pasos de commit), pero `min_depth` sigue sin moverse de
 0.70-0.72m durante 150+ pasos. Con tres estrategias de control distintas fallando en el
-mismo punto exacto, la conclusion es que esta esquina puntual involucra penetracion fisica
-real de la malla de colision de AirSim/UE4 (no una limitacion de estrategia de control) —
-se deja de perseguir esta geometria especifica. El valor real del detector de atascamiento
-es evitar que casos "casi atascados" (que no llegan a penetrar la malla, la gran mayoria)
-se congelen para siempre, no garantizar el 100% en el peor caso posible.
+mismo punto exacto, la conclusion fue que esta esquina puntual involucra penetracion fisica
+real de la malla de colision de AirSim/UE4 — hasta que el fix de mas abajo demostro que no
+era asi.
+
+**El fix real: destemplar el blend del planificador por proximidad, no solo en el limite
+de emergencia.** El "diluye la señal de esquive" que motivo los dos fixes anteriores solo se
+habia corregido *dentro* de la banda de emergencia (`SafetyFilter`); durante el acercamiento
+—antes de cruzar ese umbral, pero ya con un obstaculo cerca— el blend seguia constante,
+tironeando hacia el objetivo con la misma fuerza sin importar la distancia. `MissionPlanner.
+update()` ahora acepta `avoidance_urgency` (0..1) y reduce `position_blend`/`yaw_blend` en
+esa proporcion; `SafetyFilter.urgency_for_depth()` calcula la señal a partir de una nueva
+banda de precaucion (`caution_depth_m`, sin estado, se puede llamar antes del blend). Con
+esto, el giro de esquive llega con autoridad completa durante todo el acercamiento, no solo
+en el ultimo instante.
+
+Probado en vivo sobre la misma esquina que fallaba con las tres estrategias anteriores:
+**0/250 emergency stops de punta a punta**. La profundidad toca 1.23m exactamente en el
+punto donde antes quedaba atascada, y se recupera a 2.43m en vez de congelarse — sigue
+esquivando y recuperandose varias veces mas a lo largo del corredor (otros obstaculos en la
+ruta de 34m), terminando en espacio abierto (min_depth 6.56m). La conclusion sobre
+"penetracion fisica" del parrafo anterior era prematura: el problema seguia siendo dilucion
+de señal, esta vez en la fase de acercamiento en vez de en la emergencia misma. Este fix
+funciona con el checkpoint ya entrenado — no depende de reentrenar. Tests:
+`test_mission_planner_avoidance_urgency_tapers_goal_contribution`,
+`test_urgency_for_depth_ramps_linearly_between_bands`.
 
 **Segunda campaña de grabacion.** `scripts/record_expert_campaign_v2.py`: misma grilla de
 posiciones/rumbos que la primera (16 episodios, sin la diagonal para acotar tiempo) mas 3
