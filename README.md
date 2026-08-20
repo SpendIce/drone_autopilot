@@ -246,12 +246,14 @@ los manifests (`merge-manifests`, agregado en `manifest.py`/`cli.py`):
 
 ```bash
 # En Kaggle, con el dataset semilla ya montado en /kaggle/input/... y
-# runs/expert_dataset subido como dataset propio (o copiado a /kaggle/working/):
+# runs/expert_dataset + runs/expert_dataset_v2 subidos como datasets propios:
 mkdir -p /kaggle/working/combined_dataset
 ln -s /kaggle/input/datasets/lukpellant/droneflight-obs-avoidanceairsimrgbdepth10k-320x320/data_collected_potential_final_v58_mod25_320x320_cmds \
   /kaggle/working/combined_dataset/seed
-ln -s /kaggle/input/datasets/<tu-usuario>/expert-avoidance-dataset/expert_dataset \
+ln -s /kaggle/input/datasets/<tu-usuario>/airsim-blocks-expert-avoidance-rgbd-3k/expert_dataset \
   /kaggle/working/combined_dataset/expert
+ln -s /kaggle/input/datasets/<tu-usuario>/<slug-v2>/expert_dataset_v2 \
+  /kaggle/working/combined_dataset/expert_v2
 
 python3 -m drone_autopilot.cli build-airsim-manifest /kaggle/working/combined_dataset/seed \
   --source airsim_obstacle_avoidance_seed --path-root /kaggle/working/combined_dataset \
@@ -261,8 +263,13 @@ python3 -m drone_autopilot.cli build-airsim-manifest /kaggle/working/combined_da
   --source expert_avoidance_seed --path-root /kaggle/working/combined_dataset \
   --episode-length 135 --output /kaggle/working/expert_manifest.parquet
 
+python3 -m drone_autopilot.cli build-airsim-manifest /kaggle/working/combined_dataset/expert_v2 \
+  --source expert_avoidance_seed_v2 --path-root /kaggle/working/combined_dataset \
+  --episode-length 135 --output /kaggle/working/expert_manifest_v2.parquet
+
 python3 -m drone_autopilot.cli merge-manifests \
   /kaggle/working/seed_manifest.parquet /kaggle/working/expert_manifest.parquet \
+  /kaggle/working/expert_manifest_v2.parquet \
   --output /kaggle/working/combined_manifest.parquet
 
 torchrun --standalone --nproc_per_node=2 -m drone_autopilot.cli train \
@@ -270,14 +277,14 @@ torchrun --standalone --nproc_per_node=2 -m drone_autopilot.cli train \
   --data-root /kaggle/working/combined_dataset \
   --backbone mobilenet_v3_small --image-size 224 --epochs 20 --batch-size 32 \
   --distributed \
-  --output /kaggle/working/rgbd_mobilenet_v3_small_224_e20_ddp_avoidance_last.pt \
-  --best-output /kaggle/working/rgbd_mobilenet_v3_small_224_e20_ddp_avoidance_best.pt
+  --output /kaggle/working/rgbd_mobilenet_v3_small_224_e20_ddp_avoidance_v2_last.pt \
+  --best-output /kaggle/working/rgbd_mobilenet_v3_small_224_e20_ddp_avoidance_v2_best.pt
 ```
 
-`runs/expert_dataset` pesa ~703MB (241MB rgb, 449MB depth, 13MB commands) — subirlo como
-Kaggle Dataset propio (CLI `kaggle datasets create` o la UI) antes de linkearlo. Despues
-del reentrenamiento, repetir la tabla de la seccion 2 con el checkpoint nuevo para
-cuantificar la mejora.
+`runs/expert_dataset` pesa ~703MB (241MB rgb, 449MB depth, 13MB commands), `expert_dataset_v2`
+~480MB (ya con el episodio degenerado y las colas congeladas descartados, 2102 frames) —
+subir los dos como Kaggle Datasets propios antes de linkearlos. Despues del reentrenamiento,
+repetir la tabla de la seccion 2 con el checkpoint nuevo para cuantificar la mejora.
 
 ### 5. Resultado del reentrenamiento y dos bugs mas encontrados en el loop cerrado
 
@@ -402,6 +409,24 @@ A 3x, la mision completa las dos etapas en los mismos 135 pasos que a velocidad 
 apenas avanzaban. La regla es la esperada: subir velocidad sin subir el margen de
 frenado en proporcion reintroduce el riesgo de colision (menor distancia de reaccion
 para la misma profundidad de deteccion); subiendolos juntos, no.
+
+**Performance del loop: `depth-interval` es un trade-off de throughput vs. frescura, no
+solo un ahorro de computo.** Medido en corridas equivalentes (135 pasos, mismo mapa):
+
+| `--depth-interval` | `mean_capture_s` | `mean_step_hz` | Resultado en la ruta obstruida |
+|---|---|---|---|
+| 5 (config original del informe) | ~0.17-0.22s | ~1.4-3.7 Hz | Colision fisica real (`state_collided=True`) — la profundidad llega hasta 3.2s desactualizada |
+| 1 (maxima frescura) | ~0.5-0.7s | ~0.6-0.8 Hz | Sin colision, pero el loop se vuelve ~5x mas lento |
+| 2 (usado en la campaña v2) | ~0.3s | ~3.1 Hz | Sin colision, throughput cercano al original |
+
+`depth-interval=5` fue el valor "verificado" del informe original porque el checkpoint viejo
+nunca se acercaba lo suficiente a un obstaculo para que la latencia de sensado importara. Con
+el piloto reentrenado navegando mas cerca de los obstaculos, la misma configuracion deja de
+ser segura — la profundidad reportada puede estar hasta `depth-interval * command-duration`
+segundos vieja (3.2s en el caso original), tiempo mas que suficiente para recorrer el margen
+de emergencia completo a velocidad de crucero. `depth-interval=2` es el punto medio recomendado
+para las corridas de este proyecto: recupera casi todo el throughput de `=5` sin la latencia de
+sensado que causo la colision.
 
 ## Verificacion
 
