@@ -154,6 +154,7 @@ def cmd_airsim_loop(args: argparse.Namespace) -> int:
             vz_deadband_mps=args.vz_deadband,
             yaw_rate_deadband_radps=args.yaw_deadband,
             emergency_depth_m=args.emergency_depth,
+            caution_depth_m=args.safety_caution_depth,
             depth_roi_top=args.depth_roi_top,
             depth_roi_bottom=args.depth_roi_bottom,
             depth_roi_left=args.depth_roi_left,
@@ -243,6 +244,7 @@ def cmd_record_expert(args: argparse.Namespace) -> int:
             max_yaw_rate_radps=args.max_yaw_rate,
             smoothing_alpha=args.smoothing_alpha,
             emergency_depth_m=args.emergency_depth,
+            caution_depth_m=args.safety_caution_depth,
             depth_roi_top=args.depth_roi_top,
             depth_roi_bottom=args.depth_roi_bottom,
             depth_roi_left=args.depth_roi_left,
@@ -409,6 +411,7 @@ def build_parser() -> argparse.ArgumentParser:
     airsim.add_argument("--vz-deadband", type=float, default=0.02)
     airsim.add_argument("--yaw-deadband", type=float, default=0.05)
     airsim.add_argument("--emergency-depth", type=float, default=0.8)
+    airsim.add_argument("--safety-caution-depth", type=float, default=3.0)
     airsim.add_argument("--depth-roi-top", type=float, default=0.0)
     airsim.add_argument("--depth-roi-bottom", type=float, default=1.0)
     airsim.add_argument("--depth-roi-left", type=float, default=0.0)
@@ -472,6 +475,7 @@ def build_parser() -> argparse.ArgumentParser:
     record.add_argument("--max-yaw-rate", type=float, default=0.8)
     record.add_argument("--smoothing-alpha", type=float, default=0.2)
     record.add_argument("--emergency-depth", type=float, default=0.8)
+    record.add_argument("--safety-caution-depth", type=float, default=3.0)
     record.add_argument("--depth-roi-top", type=float, default=0.0)
     record.add_argument("--depth-roi-bottom", type=float, default=1.0)
     record.add_argument("--depth-roi-left", type=float, default=0.0)

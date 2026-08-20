@@ -301,3 +301,38 @@ def test_safety_config_rejects_invalid_stuck_escape_params() -> None:
         SafetyConfig(stuck_escape_steps=0)
     with pytest.raises(ValueError, match="stuck_escape_vx_mps"):
         SafetyConfig(stuck_escape_vx_mps=0.1)
+
+
+def test_safety_config_rejects_caution_depth_at_or_below_emergency_depth() -> None:
+    with pytest.raises(ValueError, match="caution_depth_m"):
+        SafetyConfig(emergency_depth_m=1.0, caution_depth_m=1.0)
+
+
+def test_urgency_for_depth_is_zero_beyond_caution_band() -> None:
+    safety = SafetyFilter(SafetyConfig(emergency_depth_m=0.8, caution_depth_m=3.0))
+
+    urgency = safety.urgency_for_depth(np.full((4, 4), 5.0, dtype=np.float32))
+
+    assert urgency == pytest.approx(0.0)
+
+
+def test_urgency_for_depth_is_one_at_or_below_emergency_depth() -> None:
+    safety = SafetyFilter(SafetyConfig(emergency_depth_m=0.8, caution_depth_m=3.0))
+
+    urgency = safety.urgency_for_depth(np.full((4, 4), 0.5, dtype=np.float32))
+
+    assert urgency == pytest.approx(1.0)
+
+
+def test_urgency_for_depth_ramps_linearly_between_bands() -> None:
+    safety = SafetyFilter(SafetyConfig(emergency_depth_m=0.0, caution_depth_m=2.0))
+
+    urgency = safety.urgency_for_depth(np.full((4, 4), 1.0, dtype=np.float32))
+
+    assert urgency == pytest.approx(0.5)
+
+
+def test_urgency_for_depth_is_zero_when_depth_unavailable() -> None:
+    safety = SafetyFilter(SafetyConfig())
+
+    assert safety.urgency_for_depth(None) == pytest.approx(0.0)

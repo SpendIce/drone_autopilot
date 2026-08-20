@@ -70,7 +70,19 @@ class MissionPlanner:
         self,
         reactive_command: VelocityCommand,
         state: Mapping[str, object],
+        *,
+        avoidance_urgency: float = 0.0,
     ) -> MissionOutput:
+        """`avoidance_urgency` (0..1) tapers how much the goal contributes to
+        the blend, down to 0 at urgency=1 (pure reactive_command). The hard
+        SafetyFilter emergency band already ignores the goal entirely once
+        very close, but closed-loop telemetry showed the goal-seeking blend
+        roughly halving the network's avoidance intent well before that —
+        during the approach, not just the emergency itself. This lets a
+        caller (see SafetyFilter.urgency_for_depth) hand the mission planner
+        a proximity signal so it backs off the goal proportionally as an
+        obstacle gets closer, instead of only at the SafetyFilter's cliff.
+        """
         if self._mission_complete:
             return self._complete_output()
 
@@ -110,11 +122,14 @@ class MissionPlanner:
                 )
             ),
         )
+        urgency = float(np.clip(avoidance_urgency, 0.0, 1.0))
+        position_blend = self.config.position_blend * (1.0 - urgency)
+        yaw_blend = self.config.yaw_blend * (1.0 - urgency)
         command = VelocityCommand(
-            vx=_blend(reactive_command.vx, goal.vx, self.config.position_blend),
-            vy=_blend(reactive_command.vy, goal.vy, self.config.position_blend),
+            vx=_blend(reactive_command.vx, goal.vx, position_blend),
+            vy=_blend(reactive_command.vy, goal.vy, position_blend),
             vz=reactive_command.vz,
-            yaw_rate=_blend(reactive_command.yaw_rate, goal.yaw_rate, self.config.yaw_blend),
+            yaw_rate=_blend(reactive_command.yaw_rate, goal.yaw_rate, yaw_blend),
         )
         return MissionOutput(
             command=command,

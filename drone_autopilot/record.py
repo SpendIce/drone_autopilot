@@ -73,7 +73,10 @@ def record_episode(
         planned = prediction
         if mission_planner is not None:
             state = adapter.capture_state()
-            mission_output = mission_planner.update(prediction, state)
+            urgency = safety_filter.urgency_for_depth(observation.depth_m)
+            mission_output = mission_planner.update(
+                prediction, state, avoidance_urgency=urgency
+            )
             planned = mission_output.command
             mission_complete = mission_output.mission_complete
 

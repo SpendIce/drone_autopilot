@@ -30,6 +30,7 @@ class SafetyConfig:
     stuck_depth_improvement_m: float = 0.05
     stuck_escape_steps: int = 20
     stuck_escape_vx_mps: float = -0.6
+    caution_depth_m: float = 3.0
 
     def __post_init__(self) -> None:
         if self.stuck_streak_threshold <= 0:
@@ -38,6 +39,8 @@ class SafetyConfig:
             raise ValueError("stuck_escape_steps must be positive")
         if self.stuck_escape_vx_mps > 0.0:
             raise ValueError("stuck_escape_vx_mps must be <= 0 (it is a reverse speed)")
+        if self.caution_depth_m <= self.emergency_depth_m:
+            raise ValueError("caution_depth_m must be greater than emergency_depth_m")
 
 
 @dataclass(frozen=True)
@@ -123,6 +126,20 @@ class SafetyFilter:
             reason="ok",
             min_depth_m=min_depth,
         )
+
+    def urgency_for_depth(self, depth_m: np.ndarray | None) -> float:
+        """0..1 proximity signal for MissionPlanner.update(avoidance_urgency=...).
+
+        0 at/beyond caution_depth_m, 1 at/below emergency_depth_m, linear in
+        between. Stateless (depends only on config and the given frame) so
+        it's safe to call before mission_planner.update()/filter() in the
+        same step, ahead of computing the mission-blended command.
+        """
+        min_depth = self._min_valid_depth(depth_m)
+        if min_depth is None:
+            return 0.0
+        span = max(self.config.caution_depth_m - self.config.emergency_depth_m, 1e-6)
+        return float(np.clip((self.config.caution_depth_m - min_depth) / span, 0.0, 1.0))
 
     def _escape_command(
         self, command: VelocityCommand, steering_source: VelocityCommand

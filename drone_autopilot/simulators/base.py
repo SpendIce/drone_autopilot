@@ -227,7 +227,10 @@ def run_closed_loop(
             if mission_planner is not None:
                 phase_started_at = time.perf_counter()
                 mission_state = adapter.capture_state()
-                mission_output = mission_planner.update(prediction, mission_state)
+                urgency = safety_filter.urgency_for_depth(observation.depth_m)
+                mission_output = mission_planner.update(
+                    prediction, mission_state, avoidance_urgency=urgency
+                )
                 planned = mission_output.command
                 mission_state_s = time.perf_counter() - phase_started_at
             else:
