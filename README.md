@@ -351,6 +351,43 @@ de 70→0 en la pared original), pero no garantizan clarear esta geometria espec
 actualizado (gira temprano, retrocede como ultimo recurso) en vez de seguir persiguiendo
 un unico obstaculo puntual.
 
+**Detector de atascamiento (memoria minima, tipo Bug1/Bug2).** `_escape_command` reacciona
+proporcionalmente cada paso — alcanza para la mayoria de los obstaculos, pero en la esquina
+concava la profundidad quedaba exactamente congelada durante cientos de pasos con la señal
+en autoridad maxima: reaccionar igual cada paso nunca escala. `SafetyFilter` ahora cuenta
+pasos consecutivos en `close_obstacle` sin ganancia real de profundidad
+(`stuck_streak_threshold`, default 15, con `stuck_depth_improvement_m=0.05` como umbral de
+"mejoro de verdad"); al cruzar el umbral, en vez de seguir re-decidiendo paso a paso, se
+compromete a una maniobra fija y sostenida (`stuck_escape_steps` pasos de reversa +
+lateral/yaw a tope, sin suavizado) en la direccion detectada al momento del commit. Tests:
+`test_safety_filter_commits_to_stuck_escape_after_streak_of_frozen_depth`,
+`test_safety_filter_stuck_escape_lasts_configured_duration_then_resumes_reactive`,
+`test_safety_filter_stuck_streak_resets_when_depth_improves`.
+
+Probado en vivo sobre la misma esquina: el mecanismo se activa y alterna correctamente
+entre respuesta proporcional y commit fijo (se ve en la telemetria: `vx=-0.6, vy=-0.6,
+yaw=-34.4°/s` exactos en los pasos de commit), pero `min_depth` sigue sin moverse de
+0.70-0.72m durante 150+ pasos. Con tres estrategias de control distintas fallando en el
+mismo punto exacto, la conclusion es que esta esquina puntual involucra penetracion fisica
+real de la malla de colision de AirSim/UE4 (no una limitacion de estrategia de control) —
+se deja de perseguir esta geometria especifica. El valor real del detector de atascamiento
+es evitar que casos "casi atascados" (que no llegan a penetrar la malla, la gran mayoria)
+se congelen para siempre, no garantizar el 100% en el peor caso posible.
+
+**Segunda campaña de grabacion.** `scripts/record_expert_campaign_v2.py`: misma grilla de
+posiciones/rumbos que la primera (16 episodios, sin la diagonal para acotar tiempo) mas 3
+repeticiones de la ruta obstruida, con `depth-interval=2` (en vez de 5) y los defaults
+nuevos de `expert_policy.py`. Resultado: 2910 frames; 15/16 episodios de grilla con
+`mission_complete=True` y 0 emergency stops; 1 episodio degenerado (mismo spawn-dentro-de-
+obstaculo de `(22,-14)` de la campaña anterior); las 3 repeticiones de la ruta obstruida
+quedaron atascadas (~160-166/250 cada una, consistente con el hallazgo de arriba). Antes de
+armar el manifest, descartar el episodio degenerado y — a diferencia de la primera campaña —
+evaluar si conviene recortar la cola congelada de los 3 intentos obstruidos (frames
+duplicados con "retroceder a tope" como etiqueta repetida cientos de veces sesgaria el
+dataset) en vez de descartar el episodio completo, ya que la primera mitad de esos 3
+intentos (el acercamiento y el giro temprano, antes de trabarse) es señal util que no
+esta en la primera campaña.
+
 **Velocidad: escalado seguro validado.** En la pared original, subir `mission-cruise-speed`
 y `max-vx` junto con `emergency-depth` en la misma proporcion (para no perder margen de
 frenado) funciona limpio hasta 3x la velocidad original:
