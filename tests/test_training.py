@@ -148,6 +148,28 @@ def test_validation_score_ignores_vy_by_default() -> None:
     assert _validation_score(row) == pytest.approx(0.6)
 
 
+def test_validation_score_normalizes_by_action_std() -> None:
+    row = {
+        "val_mae_vx": 0.3,
+        "val_mae_vz": 0.2,
+        "val_mae_yaw_rate": 0.1,
+    }
+    normalization = {"vx": 1.0, "vz": 0.5, "yaw_rate": 0.2}
+
+    score = _validation_score(row, normalization)
+
+    assert score == pytest.approx(0.3 / 1.0 + 0.2 / 0.5 + 0.1 / 0.2)
+
+
+def test_validation_score_normalization_falls_back_to_raw_on_zero_std() -> None:
+    row = {"val_mae_vx": 0.3, "val_mae_vz": 0.2, "val_mae_yaw_rate": 0.1}
+    normalization = {"vx": 0.0, "vz": 0.5, "yaw_rate": 0.2}
+
+    score = _validation_score(row, normalization)
+
+    assert score == pytest.approx(0.3 / 1.0 + 0.2 / 0.5 + 0.1 / 0.2)
+
+
 def test_unwrap_distributed_model_returns_inner_module() -> None:
     inner = object()
 

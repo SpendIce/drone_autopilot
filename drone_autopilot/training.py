@@ -142,7 +142,16 @@ def _default_best_output_path(output_path: Path | str) -> Path:
     return output_path.with_name(f"{output_path.name}_best")
 
 
-def _validation_score(row: dict[str, float]) -> float | None:
+def _validation_score(
+    row: dict[str, float],
+    normalization: dict[str, float] | None = None,
+) -> float | None:
+    """Weighted sum of per-output validation MAE.
+
+    ``normalization`` divides each MAE by its action's training-split std
+    before weighting, so linear (m/s) and angular (rad/s) errors become
+    comparable relative-error terms instead of being summed as raw units.
+    """
     score = 0.0
     used = False
     for name, weight in BEST_VAL_SCORE_WEIGHTS.items():
@@ -151,7 +160,9 @@ def _validation_score(row: dict[str, float]) -> float | None:
         key = f"val_mae_{name}"
         if key not in row:
             continue
-        score += row[key] * weight
+        scale = normalization.get(name, 1.0) if normalization else 1.0
+        scale = scale if scale > 1e-8 else 1.0
+        score += (row[key] / scale) * weight
         used = True
     return score if used else None
 
@@ -276,6 +287,7 @@ def train(config: TrainingConfig) -> dict[str, object]:
     records = read_manifest(config.manifest_path)
     train_records, val_records, test_records = _split_records(records)
     action_stats = ActionStats.from_records(train_records)
+    score_normalization = dict(zip(ACTION_NAMES, action_stats.std))
 
     train_dataset = PilotManifestDataset(
         train_records,
@@ -380,7 +392,7 @@ def train(config: TrainingConfig) -> dict[str, object]:
                 )
                 for name, value in val_metrics.mae.items():
                     row[f"val_mae_{name}"] = value
-                val_score = _validation_score(row)
+                val_score = _validation_score(row, score_normalization)
                 if val_score is not None:
                     row["val_score"] = val_score
                     if best_val_score is None or val_score < best_val_score:
