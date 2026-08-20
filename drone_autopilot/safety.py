@@ -52,6 +52,7 @@ class SafetyFilter:
         predicted: VelocityCommand | np.ndarray | list[float] | tuple[float, ...],
         *,
         depth_m: np.ndarray | None = None,
+        reactive: VelocityCommand | np.ndarray | list[float] | tuple[float, ...] | None = None,
     ) -> SafetyFilterResult:
         command = self._coerce_command(predicted)
         if command is None or not command.is_finite():
@@ -64,9 +65,12 @@ class SafetyFilter:
 
         min_depth = self._min_valid_depth(depth_m)
         if min_depth is not None and min_depth < self.config.emergency_depth_m:
-            self._previous = VelocityCommand.hover()
+            reactive_command = self._coerce_command(reactive) if reactive is not None else None
+            steering_source = reactive_command if reactive_command is not None and reactive_command.is_finite() else command
+            escape = self._escape_command(command, steering_source)
+            self._previous = escape
             return SafetyFilterResult(
-                command=VelocityCommand.hover(),
+                command=escape,
                 emergency_stop=True,
                 reason="close_obstacle",
                 min_depth_m=min_depth,
@@ -87,6 +91,53 @@ class SafetyFilter:
             reason="ok",
             min_depth_m=min_depth,
         )
+
+    def _escape_command(
+        self, command: VelocityCommand, steering_source: VelocityCommand
+    ) -> VelocityCommand:
+        """Command used while inside the emergency depth radius.
+
+        A blind hover() here freezes the drone permanently: depth stays under
+        the threshold forever with zero velocity, so no avoidance (learned or
+        planned) can ever execute again once triggered (see closed-loop runs
+        where the drone locks at the same position for the rest of the
+        episode). Instead, forbid further approach (clamp vx to <= 0, i.e.
+        brake or back away, never accelerate toward the obstacle) while still
+        clamping and passing through lateral/yaw motion so a turn-and-strafe
+        escape started before the emergency threshold isn't cut off.
+
+        `steering_source` supplies vy/yaw_rate, and also participates in the vx
+        veto — pass the policy's raw, pre-mission-blend prediction here when
+        available. Measured runs show the mission planner's goal-seeking blend
+        roughly halves the network's turn-rate intent (it keeps pulling toward
+        a waypoint whose bearing is exactly what's blocked); the same dilution
+        hits vx just as hard — a policy actively wanting to reverse can have
+        that cancelled by the blended-in positive goal.vx, leaving the escape
+        with nothing but "brake to zero" and no way to actually gain distance.
+        Taking min(blended, raw, 0.0) means either source retreating is
+        enough; the goal's pull can only ever hold vx at 0, never override an
+        active retreat with forward motion.
+        """
+        clamped_forward = command.clamp(
+            max_vx=self.config.max_vx_mps,
+            max_vy=self.config.max_vy_mps,
+            max_vz=self.config.max_vz_mps,
+            max_yaw_rate=self.config.max_yaw_rate_radps,
+        )
+        clamped_steering = steering_source.clamp(
+            max_vx=self.config.max_vx_mps,
+            max_vy=self.config.max_vy_mps,
+            max_vz=self.config.max_vz_mps,
+            max_yaw_rate=self.config.max_yaw_rate_radps,
+        )
+        escape = VelocityCommand(
+            vx=min(clamped_forward.vx, clamped_steering.vx, 0.0),
+            vy=clamped_steering.vy,
+            vz=0.0,
+            yaw_rate=clamped_steering.yaw_rate,
+        )
+        target = self._apply_deadbands(escape)
+        return target.smooth_toward(self._previous, self.config.smoothing_alpha)
 
     def _coerce_command(
         self,

@@ -233,7 +233,7 @@ def run_closed_loop(
             else:
                 mission_state_s = 0.0
             phase_started_at = time.perf_counter()
-            result = safety_filter.filter(planned, depth_m=observation.depth_m)
+            result = safety_filter.filter(planned, depth_m=observation.depth_m, reactive=prediction)
             filter_s = time.perf_counter() - phase_started_at
             phase_started_at = time.perf_counter()
             if result.emergency_stop:

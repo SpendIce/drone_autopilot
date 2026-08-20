@@ -77,7 +77,7 @@ def record_episode(
             planned = mission_output.command
             mission_complete = mission_output.mission_complete
 
-        result = safety_filter.filter(planned, depth_m=observation.depth_m)
+        result = safety_filter.filter(planned, depth_m=observation.depth_m, reactive=prediction)
         if result.emergency_stop:
             emergency_stops += 1
             adapter.hover(duration_s=command_duration_s)
