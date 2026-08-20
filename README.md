@@ -279,6 +279,93 @@ Kaggle Dataset propio (CLI `kaggle datasets create` o la UI) antes de linkearlo.
 del reentrenamiento, repetir la tabla de la seccion 2 con el checkpoint nuevo para
 cuantificar la mejora.
 
+### 5. Resultado del reentrenamiento y dos bugs mas encontrados en el loop cerrado
+
+El reentrenamiento (`rgbd_mobilenet_v3_small_224_e20_ddp_avoidance_best.pt`, misma epoca
+10 elegida que el checkpoint original) se corrio sobre Kaggle T4x2 con el dataset
+combinado (10k semilla + 3105 del experto). Repitiendo la tabla de la seccion 2 con este
+checkpoint, en la pared original (`(14,-18) -> (14,-26) -> (36,-26)`):
+
+| Config | Checkpoint | emergency_stops | min_depth_m | distancia restante |
+|---|---|---|---|---|
+| `blend=0.0` (red pura) | original | 70/135 | 0.24 | 11.03 m |
+| `blend=0.0` (red pura) | **reentrenado** | **0/135** | **3.89** | **5.95 m** |
+| `blend=0.45/0.5` (config del informe) | original | 0/135 | 2.35 | 8.36 m (no pasa WP0) |
+| `blend=0.45/0.5` (config del informe) | **reentrenado** | **0/135** | **6.09** | **pasa WP0**, 19.31 m a WP1 |
+
+La red sola dejo de chocar contra la pared original. Buscando un caso mas duro (un
+obstaculo puesto deliberadamente en el medio de una ruta recta, para que "planificador
+solo" tuviera que fallar necesariamente) aparecieron tres bugs reales mas en
+`SafetyFilter`, todos del mismo patron: el comando ya mezclado con el objetivo del
+planificador diluye la senal de evitacion justo cuando mas autoridad hace falta.
+
+**Bug: el freno de emergencia era permanente.** `close_obstacle` devolvia `hover()` sin
+condiciones — al no moverse, la profundidad no cambia, con lo cual el freno se
+retrigger indefinidamente aunque la red intente esquivar. Fix en `safety.py`
+(`_escape_command`): mientras haya un obstaculo cerca, se prohibe seguir acercandose
+(`vx <= 0`, freno o retroceso, nunca acelerar hacia el obstaculo) pero se deja pasar el
+movimiento lateral/yaw. Test: `test_safety_filter_close_obstacle_forbids_forward_approach`,
+`test_safety_filter_close_obstacle_permits_backing_away`.
+
+**Bug: el blend del planificador diluia la senal de esquive.** Aun con el fix anterior,
+`SafetyFilter.filter()` solo recibia el comando ya mezclado con el objetivo
+(`MissionPlanner` blend), y esa mezcla le recortaba a la mitad el `yaw_rate` que la red
+pedia (medido: `predicted_yaw_rate` promedio 0.384 rad/s vs `planned_yaw_rate` 0.152 en el
+tramo trabado). `filter()` ahora acepta un parametro `reactive` opcional con la prediccion
+cruda pre-blend, y lo usa para `vy`/`yaw_rate` durante la emergencia en vez del comando
+diluido (`vx` sigue gobernado por el comando real, no por el crudo). Wireado en
+`run_closed_loop` y `record_episode`. Test:
+`test_safety_filter_close_obstacle_steers_by_raw_reactive_command`.
+
+**Bug: el mismo blend diluia tambien el retroceso (`vx`).** Con los dos fixes anteriores,
+sobre la ruta con obstaculo forzado (`TemplateCube_Rounded_77`) el dron seguia quedando
+fisicamente atascado — posicion y yaw exactamente congelados durante cientos de pasos, con
+`command_yaw_rate≈-0.4` sostenido sin efecto. Parecia un "local minimum" estructural de la
+navegacion reactiva (se probo `emergency_depth_m` en 0.8/1.2/1.6/2.0/2.4m sin cambios), pero
+resulto ser el mismo bug de dilucion, esta vez en `vx`: `_escape_command` solo vetaba avance
+usando el `vx` ya mezclado con el objetivo (`command`), y ese blend podia cancelar un
+retroceso real de la politica cruda (`vx` negativo mezclado con el `vx` positivo del
+objetivo da un valor cercano a cero, que el veto de "no avanzar" no distingue de "ya frenado
+del todo"). Fix: la velocidad de escape toma `min(command.vx, steering_source.vx, 0.0)` — si
+cualquiera de las dos fuentes quiere retroceder, retrocede; el objetivo ya no puede pisar un
+retroceso activo con su tironeo hacia adelante. Test:
+`test_safety_filter_close_obstacle_honors_raw_retreat_over_diluted_blend`.
+
+Con los tres fixes, el mismo experto que antes quedaba congelado con `emergency_stops=142/200`
+en un intento de la ruta obstruida (200 pasos) bajo a **6/200**, y la posicion dejo de
+congelarse esa vez: paso el punto donde antes se trababa (min_depth bajo a 0.78m y se
+recupero a 1.63m en 20 pasos). `expert_policy.py` ademas gira mas temprano y fuerte
+(`caution_depth_m=4.5`, `urgency_exponent<1` para front-load el giro) para que el retroceso
+sea el ultimo recurso, no la estrategia principal.
+
+**Pero no es 100% determinista.** Una corrida mas larga (500 pasos), mismos parametros
+exactos, volvio a quedar congelada — esta vez con retroceso real activo
+(`vx=-0.268`, no diluido) y las tres variables al maximo, sin mover un milimetro durante
+400+ pasos. La diferencia con la corrida que si zafo parece ser el timing exacto de
+contacto: una vez que la fisica de UE4/AirSim registra penetracion real de colision
+(`state_collided=True`, confirmado en una corrida anterior), ningun comando de velocidad
+la saca — es una propiedad de esta esquina concava puntual, no de los parametros. Los tres
+fixes son mejoras reales y generalizables (verificadas con tests unitarios y con la mejora
+de 70→0 en la pared original), pero no garantizan clarear esta geometria especifica al
+100% — por eso el foco paso a grabar una campaña de demostraciones con el experto
+actualizado (gira temprano, retrocede como ultimo recurso) en vez de seguir persiguiendo
+un unico obstaculo puntual.
+
+**Velocidad: escalado seguro validado.** En la pared original, subir `mission-cruise-speed`
+y `max-vx` junto con `emergency-depth` en la misma proporcion (para no perder margen de
+frenado) funciona limpio hasta 3x la velocidad original:
+
+| Velocidad crucero | max-vx | emergency-depth | emergency_stops | resultado |
+|---|---|---|---|---|
+| 0.5 m/s (original) | 0.50 | 0.8 | 0/135 | avanza, no completa en 135 pasos |
+| 1.0 m/s (2x) | 1.0 | 1.6 | 0/135 | pasa WP0, 6.10m restantes a WP1 |
+| 1.5 m/s (3x) | 1.5 | 2.4 | 0/135 | **`mission_complete: true`** |
+
+A 3x, la mision completa las dos etapas en los mismos 135 pasos que a velocidad original
+apenas avanzaban. La regla es la esperada: subir velocidad sin subir el margen de
+frenado en proporcion reintroduce el riesgo de colision (menor distancia de reaccion
+para la misma profundidad de deteccion); subiendolos juntos, no.
+
 ## Verificacion
 
 Chequeos locales que no requieren PyTorch:
