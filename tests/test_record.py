@@ -2,12 +2,49 @@ from __future__ import annotations
 
 import numpy as np
 
+from drone_autopilot.cli import build_parser
 from drone_autopilot.core_types import VelocityCommand
 from drone_autopilot.manifest import build_airsim_seed_manifest
 from drone_autopilot.mission import MissionConfig, MissionPlanner, Waypoint
 from drone_autopilot.record import next_frame_id, record_episode
 from drone_autopilot.safety import SafetyConfig, SafetyFilter
 from drone_autopilot.simulators.base import Observation, SimulatorAdapter
+
+
+def test_record_expert_cli_exposes_retreat_and_urgency_flags() -> None:
+    parser = build_parser()
+
+    args = parser.parse_args(
+        [
+            "record-expert",
+            "--output-dir",
+            "runs/expert",
+            "--retreat-depth",
+            "0.4",
+            "--retreat-vx",
+            "-0.5",
+            "--urgency-exponent",
+            "0.3",
+        ]
+    )
+
+    assert args.retreat_depth == 0.4
+    assert args.retreat_vx == -0.5
+    assert args.urgency_exponent == 0.3
+
+
+def test_record_expert_cli_defaults_match_config_defaults() -> None:
+    from drone_autopilot.expert_policy import ReactiveAvoidanceConfig
+
+    parser = build_parser()
+    defaults = ReactiveAvoidanceConfig()
+
+    args = parser.parse_args(["record-expert", "--output-dir", "runs/expert"])
+
+    assert args.caution_depth == defaults.caution_depth_m
+    assert args.retreat_depth == defaults.retreat_depth_m
+    assert args.retreat_vx == defaults.retreat_vx_mps
+    assert args.urgency_exponent == defaults.urgency_exponent
 
 
 class _Adapter(SimulatorAdapter):

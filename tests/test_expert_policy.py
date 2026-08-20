@@ -74,6 +74,52 @@ def pytest_approx_hover():
     return VelocityCommand(0.0, 0.0, 0.0, 0.0)
 
 
+def test_retreats_below_retreat_depth() -> None:
+    policy = ReactiveAvoidancePolicy()
+
+    command = policy.predict(_rgb(), _depth(policy.config.retreat_depth_m / 2))
+
+    assert command.vx == pytest.approx(policy.config.retreat_vx_mps)
+
+
+def test_retreat_ramps_between_min_forward_and_retreat_depth() -> None:
+    policy = ReactiveAvoidancePolicy()
+    midpoint = (policy.config.min_forward_depth_m + policy.config.retreat_depth_m) / 2
+
+    command = policy.predict(_rgb(), _depth(midpoint))
+
+    assert policy.config.retreat_vx_mps < command.vx < 0.0
+
+
+def test_urgency_exponent_below_one_front_loads_the_turn() -> None:
+    front_loaded = ReactiveAvoidancePolicy(ReactiveAvoidanceConfig(urgency_exponent=0.5))
+    linear = ReactiveAvoidancePolicy(ReactiveAvoidanceConfig(urgency_exponent=1.0))
+    depth = _depth(2.0)
+    depth[:, depth.shape[1] // 2 :] = 1.5  # right half closer, still mid-caution range
+
+    front_loaded_command = front_loaded.predict(_rgb(), depth)
+    linear_command = linear.predict(_rgb(), depth)
+
+    assert abs(front_loaded_command.yaw_rate) > abs(linear_command.yaw_rate)
+
+
+def test_rejects_retreat_depth_at_or_above_min_forward_depth() -> None:
+    with pytest.raises(ValueError, match="retreat_depth_m"):
+        ReactiveAvoidanceConfig(min_forward_depth_m=1.0, retreat_depth_m=1.0)
+
+
+def test_rejects_positive_retreat_speed() -> None:
+    with pytest.raises(ValueError, match="retreat_vx_mps"):
+        ReactiveAvoidanceConfig(retreat_vx_mps=0.1)
+
+
+def test_rejects_urgency_exponent_out_of_range() -> None:
+    with pytest.raises(ValueError, match="urgency_exponent"):
+        ReactiveAvoidanceConfig(urgency_exponent=0.0)
+    with pytest.raises(ValueError, match="urgency_exponent"):
+        ReactiveAvoidanceConfig(urgency_exponent=1.5)
+
+
 def test_respects_custom_config() -> None:
     config = ReactiveAvoidanceConfig(cruise_vx_mps=1.2, caution_depth_m=5.0)
     policy = ReactiveAvoidancePolicy(config)

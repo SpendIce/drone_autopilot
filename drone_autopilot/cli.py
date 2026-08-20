@@ -228,8 +228,11 @@ def cmd_record_expert(args: argparse.Namespace) -> int:
             cruise_vx_mps=args.cruise_vx,
             caution_depth_m=args.caution_depth,
             min_forward_depth_m=args.min_forward_depth,
+            retreat_depth_m=args.retreat_depth,
+            retreat_vx_mps=args.retreat_vx,
             max_lateral_vy_mps=args.max_lateral_vy,
             max_avoid_yaw_radps=args.max_avoid_yaw_rate,
+            urgency_exponent=args.urgency_exponent,
         )
     )
     safety_filter = SafetyFilter(
@@ -456,8 +459,11 @@ def build_parser() -> argparse.ArgumentParser:
     record.add_argument("--depth-camera", default="0")
     record.add_argument("--device", default="auto")
     record.add_argument("--cruise-vx", type=float, default=0.6)
-    record.add_argument("--caution-depth", type=float, default=3.0)
+    record.add_argument("--caution-depth", type=float, default=4.5)
     record.add_argument("--min-forward-depth", type=float, default=1.2)
+    record.add_argument("--retreat-depth", type=float, default=0.6)
+    record.add_argument("--retreat-vx", type=float, default=-0.35)
+    record.add_argument("--urgency-exponent", type=float, default=0.5)
     record.add_argument("--max-lateral-vy", type=float, default=0.6)
     record.add_argument("--max-avoid-yaw-rate", type=float, default=0.5)
     record.add_argument("--max-vx", type=float, default=2.0)
