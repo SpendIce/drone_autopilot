@@ -141,6 +141,7 @@ def cmd_airsim_loop(args: argparse.Namespace) -> int:
         image_size=args.image_size,
         max_depth_m=args.max_depth_m,
         device=args.device,
+        modality=args.modality,
     )
     safety_filter = SafetyFilter(
         SafetyConfig(
@@ -401,6 +402,7 @@ def build_parser() -> argparse.ArgumentParser:
     airsim.add_argument("--image-size", type=int, default=224)
     airsim.add_argument("--max-depth-m", type=float, default=50.0)
     airsim.add_argument("--device", default="auto")
+    airsim.add_argument("--modality", default="rgbd", choices=["rgb", "depth", "rgbd"])
     airsim.add_argument("--max-vx", type=float, default=2.0)
     airsim.add_argument("--max-vy", type=float, default=1.0)
     airsim.add_argument("--max-vz", type=float, default=1.0)
