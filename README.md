@@ -468,6 +468,22 @@ dataset generado de otra forma (ej. demostraciones humanas, donde el piloto si m
 imagen a color). Se declara como limitacion metodologica de esta ablacion especifica, no
 como conclusion general sobre la arquitectura RGB-D.
 
+**Prueba en lazo cerrado (`--modality` agregado a `inference.py` para esto): el MAE predice
+el comportamiento real.** `depth`-only y `rgb`-only corridos en vivo, red pura
+(`blend=0.0`), misma ruta obstruida:
+
+| Checkpoint | emergency_stops | min_depth_m | resultado |
+|---|---|---|---|
+| `depth`-only | 0/200 | 2.41 | esquiva limpio |
+| `rgb`-only | 106/200 (46 close_obstacle + 60 stuck_escape) | 0.36 | se traba, activa hasta el detector de atascamiento |
+
+El comportamiento en lazo cerrado confirma el ranking del MAE offline: `rgb`-only no solo
+tiene peor error de prediccion, tambien falla en la practica — activa el mecanismo de
+atascamiento de la seccion 5 en el 30% de los pasos. Esto no contradice el sesgo declarado
+arriba (la profundidad sigue siendo mas facil de aprender en este dataset especifico), pero
+muestra que la diferencia de MAE no es solo un numero — se traduce en una consecuencia de
+navegacion real y medible.
+
 **Velocidad: escalado seguro validado.** En la pared original, subir `mission-cruise-speed`
 y `max-vx` junto con `emergency-depth` en la misma proporcion (para no perder margen de
 frenado) funciona limpio hasta 3x la velocidad original:
