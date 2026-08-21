@@ -440,6 +440,29 @@ sin un solo emergency stop. Confirma que las demostraciones de las dos campañas
 temprano, retroceso de ultimo recurso) se transfirieron al comportamiento aprendido, no
 solo al comportamiento del experto que las genero.
 
+### 7. Ablacion RGB vs. Depth vs. RGB-D — ejecutada, con un sesgo de dataset a declarar
+
+Corrida sobre el dataset combinado (seed + experto v1 + experto v2), mismos hiperparametros
+que las corridas de la Tabla 2, solo cambia `--modality`. Metricas extraidas directamente de
+`extra.history` dentro de cada checkpoint (no hace falta reentrenar para volver a verlas):
+
+| Modalidad | val_mae_vx | val_mae_vz | val_mae_yaw_rate | val_score (normalizado) | mejor epoca |
+|---|---|---|---|---|---|
+| RGB solo | 0.486 | 0.177 | 0.149 | 1.604 | 7 |
+| Depth solo | 0.267 | 0.114 | 0.088 | 0.969 | 19 |
+| RGB-D completo | 0.282 | 0.111 | 0.089 | 0.973 | 19 |
+
+Depth solo empata (marginalmente mejor) con RGB-D completo; los dos superan claramente a RGB
+solo. **Esto no significa que RGB sea irrelevante en general — es un sesgo de como se
+construyo el dataset.** `ReactiveAvoidancePolicy` (el experto de las campañas 1 y 2) calcula
+sus acciones exclusivamente a partir de profundidad, sin usar RGB. Como esos episodios son
+~5207 de los ~15207 frames del dataset combinado (~34%), un tercio de las etiquetas de
+entrenamiento son, por construccion, una funcion determinista de la profundidad sola —
+eso favorece a `depth` en la ablacion independientemente de si RGB aportaria algo en un
+dataset generado de otra forma (ej. demostraciones humanas, donde el piloto si mira la
+imagen a color). Se declara como limitacion metodologica de esta ablacion especifica, no
+como conclusion general sobre la arquitectura RGB-D.
+
 **Velocidad: escalado seguro validado.** En la pared original, subir `mission-cruise-speed`
 y `max-vx` junto con `emergency-depth` en la misma proporcion (para no perder margen de
 frenado) funciona limpio hasta 3x la velocidad original:
