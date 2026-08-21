@@ -148,9 +148,14 @@ for modality in rgb depth rgbd; do
 done
 ```
 
-Con `rgb` y `depth`, el encoder de la rama ausente no se ejecuta (una sola rama, no dos
-concatenadas), asi que el MAE resultante cuantifica el aporte real de cada modalidad
-por separado.
+Con `rgb` y `depth`, la rama ausente sigue ejecutandose (`RgbdPilotNet.forward` siempre
+corre las dos ramas y concatena) pero recibe entrada en cero durante el entrenamiento
+(`data.py:_load_rgb`/`_load_depth`) — no es una arquitectura de una sola rama, es la misma
+red de dos ramas con una de ellas viendo solo ceros. El MAE resultante todavia cuantifica el
+aporte de cada modalidad en el error de prediccion, pero un checkpoint entrenado con
+`--modality depth` (RGB=0 siempre) recibiria RGB real fuera de distribucion si se lo corre
+en inferencia normal contra AirSim — para probarlo en lazo cerrado de forma limpia haria
+falta agregar zeroing de modalidad tambien en `inference.py`, que hoy no existe.
 
 ### 2. Aislar el aporte de la red vs. el planificador determinista — ejecutado
 
